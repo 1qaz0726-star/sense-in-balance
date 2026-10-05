@@ -112,6 +112,10 @@ String templatePhrase(String domain, Map<String, dynamic> s, Decision d) {
     return '${sideZh('${s['side']}')}後方有${s['object']}';
   }
   switch (d.action) {
+    case '已自動切換外循環':
+      if (d.cost.contains('升溫')) return '已換外循環，會稍熱';
+      if (d.cost.contains('降溫')) return '已換外循環，會稍涼';
+      return '已換外循環';
     case '立即切換外循環':
       return '請切外循環';
     case '切換外循環':
@@ -120,4 +124,31 @@ String templatePhrase(String domain, Map<String, dynamic> s, Decision d) {
       return '稍後記得換氣';
   }
   return d.action;
+}
+
+// ─── 執行層（2026-10-05 決定）────────────────────────────────
+//
+// 換氣是系統自己做得到的事，不該叫正在開車的人去做。
+// 規則引擎判定要換氣 → 系統直接切外循環 → 只有駕駛「會感覺到」（溫度會變）才告知。
+// decideCabin() 不動（仍與 states.py 逐字一致），這一層接在它後面。
+
+bool needsVentilation(Decision d) =>
+    d.action.endsWith('外循環') || d.action == '建議稍後換氣';
+
+/// 自動切換後要不要講：車內外溫差 ≥ 6 度（與 decideCabin 的代價門檻相同）才講
+Decision informAuto(Decision d, Map<String, dynamic> s) {
+  final int tin = s['t_in'];
+  final int tout = s['t_out'];
+  final delta = tout - tin;
+  var cost = '';
+  if (delta.abs() >= 6) {
+    final deg = (delta.abs() ~/ 2).clamp(0, 5);
+    cost = '車內將${delta > 0 ? '升溫' : '降溫'}約$deg度';
+  }
+  return Decision(
+    action: '已自動切換外循環',
+    urgency: cost.isEmpty ? Urgency.silent : Urgency.proactive,
+    reason: d.reason,
+    cost: cost,
+  );
 }

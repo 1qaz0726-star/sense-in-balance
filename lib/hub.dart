@@ -44,9 +44,17 @@ class Hub extends ChangeNotifier {
   // ─── 模擬車輛狀態（取代 CAN） ───
   double co2 = 420;
   final List<double> _co2Hist = [];
-  int tIn = 26, tOut = 31, occ = 2;
+  // 車外 34 度：自動切外循環時車內會升溫 → 有代價 → 才需要告知駕駛
+  int tIn = 26, tOut = 34, occ = 2;
+  double fuel = 62; // %
+  String? _turnSide;
+  DateTime? _turnUntil;
+  Decision? _inform;
+  DateTime? _informUntil;
   String recirc = '內';
   int speed = 45;
+  double _spd = 45; // 連續值；對外只發整數
+  int _t = 0;
   Scene scene = Scene.normal;
 
   // ─── 暫態事件 ───
@@ -101,7 +109,7 @@ class Hub extends ChangeNotifier {
 
   Future<void> _startServer() async {
     try {
-      _server = await HttpServer.bind(InternetAddress.anyIPv4, kWsPort, shared: true);
+      _server = await HttpServer.bind(InternetAddress.anyIPv4, kWsPort);
       serverError = null;
       _server!.listen((req) async {
         if (!WebSocketTransformer.isUpgradeRequest(req)) {
@@ -157,16 +165,13 @@ class Hub extends ChangeNotifier {
         co2 = 420;
         _co2Hist.clear();
         recirc = '內';
-        speed = 45;
       case Scene.co2Rising:
         if (co2 < 1000) co2 = 1000;
         recirc = '內';
-        speed = 45;
       case Scene.recircOut:
         recirc = '外';
-        speed = 45;
       case Scene.parked:
-        speed = 0;
+        break;
     }
     _note('情境 → ${sceneName(s)}');
     _step(sim: false);
@@ -175,8 +180,12 @@ class Hub extends ChangeNotifier {
   void injectBlindSpot({String side = 'right', String object = '機車', int seconds = 4}) {
     _blindSide = side;
     _blindObj = object;
-    _blindUntil = DateTime.now().add(Duration(seconds: seconds));
-    _note('注入盲點事件：${sideZh(side)}後方$object');
+    // 典型情境：駕駛打方向燈準備變換車道 → 該側後方有來車
+    final now = DateTime.now();
+    _turnSide = side;
+    _turnUntil = now.add(Duration(seconds: seconds + 1));
+    _blindUntil = now.add(Duration(seconds: seconds));
+    _note('注入：打${sideZh(side)}方向燈，${sideZh(side)}後方$object');
     _step(sim: false);
   }
 
@@ -209,11 +218,25 @@ class Hub extends ChangeNotifier {
 
   void _simulate() {
     final rnd = Random();
+    // 車速：行駛時在 40–60 之間緩慢起伏（像市區巡航），停車時每秒減 12 到 0
+    _t++;
+    if (scene == Scene.parked) {
+      _spd = max(0, _spd - 12);
+    } else {
+      final target = 50 + 9 * sin(_t / 9) + rnd.nextDouble() * 2 - 1;
+      final step = (target - _spd).clamp(-4.0, 4.0);
+      _spd += step;
+    }
+    speed = _spd.round();
+    fuel = max(5, fuel - 0.02);
     switch (scene) {
       case Scene.normal:
         co2 = 420 + rnd.nextDouble() * 20;
       case Scene.co2Rising:
-        co2 = min(co2 + 14 + rnd.nextDouble() * 4, 2400);
+        // 系統一旦自動切到外循環，CO₂ 就會降下來
+        co2 = recirc == '內'
+            ? min(co2 + 14 + rnd.nextDouble() * 4, 2400)
+            : max(co2 - 45, 600);
       case Scene.recircOut:
         co2 = max(co2 - 45, 600);
       case Scene.parked:
@@ -278,6 +301,15 @@ class Hub extends ChangeNotifier {
       domain = 'cabin_air';
       state = cabinState();
       d = decideCabin(state);
+      // 執行層：要換氣就系統自己切，不叫駕駛做（rules.dart informAuto）
+      if (recirc == '內' && needsVentilation(d)) {
+        recirc = '外';
+        _inform = informAuto(d, state);
+        _informUntil = now.add(const Duration(seconds: 8));
+        _note('系統自動切外循環（${d.reason}）'
+            '${_inform!.cost.isEmpty ? '，無感 → 不告知' : '，${_inform!.cost} → 告知'}');
+      }
+      if (_informUntil != null && now.isBefore(_informUntil!)) d = _inform!;
     }
 
     if (u == null) {
@@ -299,6 +331,7 @@ class Hub extends ChangeNotifier {
       phrase: u?.text,
       phraseSrc: u?.src,
       phraseMs: u?.ms,
+      vehicle: _vehicle(now),
     );
     last = env;
     _out.add(env);
@@ -361,6 +394,18 @@ class Hub extends ChangeNotifier {
   }
 
   String? get lastRejected => _utt?.rejected;
+
+  /// 儀表常駐：時速、檔位、油量、方向燈、警示燈（只放亮著的）
+  Map<String, dynamic> _vehicle(DateTime now) {
+    final turning = _turnUntil != null && now.isBefore(_turnUntil!);
+    return {
+      'speed': speed,
+      'gear': scene == Scene.parked && speed == 0 ? 'P' : 'D',
+      'fuel_pct': fuel.round(),
+      'turn': turning ? _turnSide : null,
+      'telltales': [if (fuel < 12) 'fuel_low'],
+    };
+  }
 }
 
 String sceneName(Scene s) => const {

@@ -37,18 +37,20 @@ void main() {
     expect(a.decision.urgency, Urgency.silent);
     expect(a.phrase, isNull);
 
-    // B CO₂ 上升 → 主動告知「建議稍後換氣」，無模型時用模板
+    // B CO₂ 上升 → 系統自己切外循環（不叫駕駛做）；車外 34 度會升溫 → 有代價 → 告知
     Hub.I.setScene(Scene.co2Rising);
-    final b = await waitFor((e) => e.decision.action == '建議稍後換氣');
+    final b = await waitFor((e) => e.decision.action == '已自動切換外循環');
     expect(b.decision.urgency, Urgency.proactive);
-    expect(b.state['trend'], anyOf('↑', '↑↑'));
-    expect(b.phrase, '稍後記得換氣');
+    expect(b.decision.cost, contains('升溫'));
+    expect(b.phrase, '已換外循環，會稍熱');
     expect(b.phraseSrc, 'template');
+    expect(Hub.I.recirc, '外');
 
-    // 切外循環 → 回到 silent
-    Hub.I.setScene(Scene.recircOut);
-    final r = await waitFor((e) => e.state['recirc'] == '外');
-    expect(r.decision.urgency, Urgency.silent);
+    // 告知 8 秒後回到 silent，CO₂ 下降
+    final r = await waitFor(
+        (e) => e.domain == 'cabin_air' && e.decision.urgency == Urgency.silent && e.ts > b.ts + 8,
+        secs: 12);
+    expect(r.state['trend'], '↓');
 
     // C 盲點 → 安全級、規則直出，4 秒後自動結束
     Hub.I.injectBlindSpot(seconds: 2);
@@ -56,11 +58,13 @@ void main() {
     expect(c.decision.urgency, Urgency.safety);
     expect(c.phrase, '右後方有機車');
     expect(c.phraseSrc, 'rule');
+    expect(c.vehicle?['turn'], 'right'); // 先打方向燈才偵測到
     await waitFor((e) => e.domain == 'cabin_air' && e.ts > c.ts + 2);
 
     // D 停車問答：查得到、查不到
     Hub.I.setScene(Scene.parked);
-    await waitFor((e) => e.speed == 0);
+    final p = await waitFor((e) => e.speed == 0 && e.vehicle?['gear'] == 'P');
+    expect(p.vehicle?['fuel_pct'], isA<int>());
     await Hub.I.ask('為什麼要換氣？');
     final d1 = await waitFor((e) => e.domain == 'query');
     expect(d1.decision.urgency, Urgency.reply);
@@ -74,5 +78,5 @@ void main() {
     await sub.cancel();
     await ws.close();
     await Hub.I.stop();
-  }, timeout: const Timeout(Duration(seconds: 60)));
+  }, timeout: const Timeout(Duration(seconds: 90)));
 }

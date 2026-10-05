@@ -1,10 +1,12 @@
 // 事件信封 —— INTERFACE.md v1.0 §2–§5
 //
 // 2026-10-05 起 AI Box 的角色搬進中控 App（平板），信封格式不變。
-// 依 §0「只准加可選欄位」加了三個欄位，舊的接收端會忽略它們：
+// 依 §0「只准加可選欄位」加了四個欄位，舊的接收端會忽略它們：
 //   phrase      這個決策的措辭（平板 SLM 產生後隨後續心跳一起廣播，取代獨立的 phrase 事件）
 //   phrase_src  slm／template／kb／rule —— 句子是誰給的，要能對外講清楚
 //   phrase_ms   措辭耗時（毫秒），slm 才有
+//   vehicle     每則都帶的車輛基本狀態 {speed, gear, fuel_pct, turn, telltales}
+//               —— 儀表常駐顯示用，不論事件是哪個 domain
 
 const String kSchema = '1.0';
 
@@ -79,6 +81,7 @@ class Envelope {
   final String? phrase;
   final String? phraseSrc;
   final int? phraseMs;
+  final Map<String, dynamic>? vehicle;
 
   const Envelope({
     required this.eventId,
@@ -91,10 +94,11 @@ class Envelope {
     this.phrase,
     this.phraseSrc,
     this.phraseMs,
+    this.vehicle,
   });
 
   int? get speed {
-    final v = state['speed'];
+    final v = vehicle?['speed'] ?? state['speed'];
     return v is num ? v.round() : null;
   }
 
@@ -110,6 +114,7 @@ class Envelope {
         if (phrase != null) 'phrase': phrase,
         if (phraseSrc != null) 'phrase_src': phraseSrc,
         if (phraseMs != null) 'phrase_ms': phraseMs,
+        if (vehicle != null) 'vehicle': vehicle,
       };
 
   /// 不認得的 schema／domain／urgency 回傳 null —— 呼叫端要降級，不可以 crash（§9）
@@ -133,6 +138,7 @@ class Envelope {
       phrase: j['phrase'] as String?,
       phraseSrc: j['phrase_src'] as String?,
       phraseMs: (j['phrase_ms'] as num?)?.round(),
+      vehicle: j['vehicle'] is Map ? Map<String, dynamic>.from(j['vehicle']) : null,
     );
   }
 }
