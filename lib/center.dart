@@ -60,9 +60,10 @@ class _CenterScreenState extends State<CenterScreen> {
     _script?.cancel();
     final steps = <(String, int, void Function())>[
       ('A 一切正常', 8, () => Hub.I.setScene(Scene.normal)),
-      ('B CO₂ 上升', 20, () => Hub.I.setScene(Scene.co2Rising)),
-      ('駕駛切外循環', 8, () => Hub.I.setScene(Scene.recircOut)),
+      ('B CO₂ 上升→系統自動換氣', 20, () => Hub.I.setScene(Scene.co2Rising)),
       ('C 右後方機車', 8, () => Hub.I.injectBlindSpot()),
+      ('C′ 左後方自行車', 8,
+          () => Hub.I.injectBlindSpot(side: 'left', object: '自行車')),
       ('D 停車問答', 0, () => Hub.I.setScene(Scene.parked)),
     ];
     var i = 0;
@@ -442,7 +443,7 @@ class _ControlPanel extends StatelessWidget {
                   FilledButton.icon(
                     onPressed: onScript,
                     icon: const Icon(Icons.play_arrow),
-                    label: const Text('自動劇本 A→B→外循環→C→D'),
+                    label: const Text('自動劇本 A→B→C→C′→D'),
                   )
                 else
                   FilledButton.icon(
@@ -453,7 +454,7 @@ class _ControlPanel extends StatelessWidget {
                 const SizedBox(height: 10),
                 sceneBtn('A 一切正常（CO₂ 420）', () => h.setScene(Scene.normal)),
                 sceneBtn('B CO₂ 上升（內循環）', () => h.setScene(Scene.co2Rising)),
-                sceneBtn('駕駛切外循環', () => h.setScene(Scene.recircOut)),
+                sceneBtn('手動切外循環', () => h.setScene(Scene.recircOut)),
                 sceneBtn('C 右後方機車（4 秒）', () => h.injectBlindSpot()),
                 sceneBtn('C′ 左後方自行車（4 秒）',
                     () => h.injectBlindSpot(side: 'left', object: '自行車')),

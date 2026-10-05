@@ -58,7 +58,7 @@ class Hub extends ChangeNotifier {
   Scene scene = Scene.normal;
 
   // ─── 暫態事件 ───
-  DateTime? _blindUntil;
+  DateTime? _blindStart, _blindUntil;
   String _blindSide = 'right', _blindObj = '機車';
   DateTime? _replyUntil;
   Map<String, dynamic>? _queryState;
@@ -166,7 +166,7 @@ class Hub extends ChangeNotifier {
         _co2Hist.clear();
         recirc = '內';
       case Scene.co2Rising:
-        if (co2 < 1000) co2 = 1000;
+        if (co2 < 700) co2 = 700; // 先升一段（約 6 秒）才過 800 的門檻
         recirc = '內';
       case Scene.recircOut:
         recirc = '外';
@@ -184,7 +184,9 @@ class Hub extends ChangeNotifier {
     final now = DateTime.now();
     _turnSide = side;
     _turnUntil = now.add(Duration(seconds: seconds + 1));
-    _blindUntil = now.add(Duration(seconds: seconds));
+    _blindStart = now.add(const Duration(seconds: 1));
+    _blindUntil = _blindStart!.add(Duration(seconds: seconds));
+    Timer(const Duration(seconds: 1), () => _step(sim: false));
     _note('注入：打${sideZh(side)}方向燈，${sideZh(side)}後方$object');
     _step(sim: false);
   }
@@ -281,7 +283,7 @@ class Hub extends ChangeNotifier {
     _Utterance? u;
 
     // 優先序：安全 > 回答 > 座艙空氣
-    if (_blindUntil != null && now.isBefore(_blindUntil!)) {
+    if (_blindUntil != null && !now.isBefore(_blindStart!) && now.isBefore(_blindUntil!)) {
       domain = 'blind_spot';
       state = {
         'side': _blindSide,

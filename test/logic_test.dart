@@ -64,6 +64,16 @@ void main() {
     test('簡體字要被擋', () {
       expect(check('二氧化碳在升，等下记得换气', p, calm).ok, isFalse);
     });
+    test('系統已做完的事不可講成指令', () {
+      const done = Decision(
+          action: '已自動切換外循環',
+          urgency: Urgency.proactive,
+          reason: 'CO2 900 上升中',
+          cost: '車內將升溫約4度');
+      const pd = '決策: 已自動切換外循環 | 原因=CO2 900 上升中 | 代價=車內將升溫約4度';
+      expect(check('已換外循環，會稍熱', pd, done).ok, isTrue);
+      expect(check('請切外循環', pd, done).ok, isFalse);
+    });
     test('該沉默就要 <silent>', () {
       const sil = Decision(action: '維持現狀', urgency: Urgency.silent);
       expect(check('<silent>', p, sil).ok, isTrue);

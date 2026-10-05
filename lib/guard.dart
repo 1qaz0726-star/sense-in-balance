@@ -50,6 +50,11 @@ GuardResult check(String raw, String prompt, Decision d) {
   final n = body(out).runes.length;
   if (n > d.limit) return GuardResult(false, out, '超字數 $n/${d.limit}');
 
+  // 「已自動切換外循環」這類已完成的動作：輸出必須講成已完成，不可變成指令（如「請切外循環」）
+  if (d.action.startsWith('已') && !out.contains('已')) {
+    return GuardResult(false, out, '已完成的動作被講成指令');
+  }
+
   final calm = d.action.contains('建議') || d.action.contains('稍後');
   if (calm) {
     for (final w in _rushWords) {

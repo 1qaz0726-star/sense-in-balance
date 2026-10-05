@@ -39,7 +39,7 @@ void main() {
 
     // B CO₂ 上升 → 系統自己切外循環（不叫駕駛做）；車外 34 度會升溫 → 有代價 → 告知
     Hub.I.setScene(Scene.co2Rising);
-    final b = await waitFor((e) => e.decision.action == '已自動切換外循環');
+    final b = await waitFor((e) => e.decision.action == '已自動切換外循環', secs: 15);
     expect(b.decision.urgency, Urgency.proactive);
     expect(b.decision.cost, contains('升溫'));
     expect(b.phrase, '已換外循環，會稍熱');
@@ -50,7 +50,8 @@ void main() {
     final r = await waitFor(
         (e) => e.domain == 'cabin_air' && e.decision.urgency == Urgency.silent && e.ts > b.ts + 8,
         secs: 12);
-    expect(r.state['trend'], '↓');
+    expect(r.state['recirc'], '外');
+    expect(r.state['co2'] as int, lessThan(b.state['co2'] as int)); // 切外循環後 CO₂ 降下來
 
     // C 盲點 → 安全級、規則直出，4 秒後自動結束
     Hub.I.injectBlindSpot(seconds: 2);
