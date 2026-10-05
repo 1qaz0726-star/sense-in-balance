@@ -1,8 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- 開發期線上圖磚用；離線版改接預打包圖磚後可移除 -->
+    <!-- 線上圖磚、模型首次下載用。圖磚看過一次會快取，之後離線可顯示 -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <application
-        android:label="cockpit_hmi"
+        android:label="座艙 HMI"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

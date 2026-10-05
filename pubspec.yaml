@@ -1,5 +1,5 @@
 name: cockpit_hmi
-description: "A new Flutter project."
+description: "座艙 HMI：雙螢幕（數位儀表／中控）＋端側 SLM 措辭"
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -36,6 +36,10 @@ dependencies:
   cupertino_icons: ^1.0.8
   flutter_map: ^8.3.2
   latlong2: ^0.10.1
+  # 0.12.6 是 Dart 3.9 能裝的最後一版（見 F:/slm_probe/lib/main.dart 開頭）
+  flutter_gemma: 0.12.6
+  path_provider: ^2.1.5
+  file_picker: ^8.1.7
 
 dev_dependencies:
   flutter_test:
