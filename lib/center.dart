@@ -15,6 +15,7 @@ import 'hub.dart';
 import 'protocol.dart';
 import 'setup.dart';
 import 'slm.dart';
+import 'voice.dart';
 
 class CenterScreen extends StatefulWidget {
   const CenterScreen({super.key});
@@ -33,6 +34,8 @@ class _CenterScreenState extends State<CenterScreen> {
   @override
   void initState() {
     super.initState();
+    Voice.I.init();
+    Hub.I.onSpeak = (t, urgent) => Voice.I.say(t, urgent: urgent);
     Hub.I.start();
     _sub = Hub.I.events.listen((e) {
       if (mounted) setState(() => ev = e);
@@ -51,6 +54,7 @@ class _CenterScreenState extends State<CenterScreen> {
     _script?.cancel();
     _sub?.cancel();
     _q.dispose();
+    Hub.I.onSpeak = null;
     Hub.I.stop();
     super.dispose();
   }
@@ -424,7 +428,7 @@ class _ControlPanel extends StatelessWidget {
       backgroundColor: C.surface,
       child: SafeArea(
         child: ListenableBuilder(
-          listenable: Listenable.merge([Hub.I, Slm.I]),
+          listenable: Listenable.merge([Hub.I, Slm.I, Voice.I]),
           builder: (context, _) {
             final h = Hub.I;
             final m = Slm.I;
@@ -460,6 +464,14 @@ class _ControlPanel extends StatelessWidget {
                     () => h.injectBlindSpot(side: 'left', object: '自行車')),
                 sceneBtn('D 停車（開放提問）', () => h.setScene(Scene.parked)),
                 sceneBtn('恢復行駛', () => h.setScene(Scene.normal)),
+                const Divider(height: 28),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('語音播報', style: TextStyle(fontSize: 16, color: C.textHigh)),
+                  subtitle: Text(Voice.I.status, style: const TextStyle(color: C.textLow)),
+                  value: Voice.I.enabled,
+                  onChanged: Voice.I.toggle,
+                ),
                 const Divider(height: 28),
                 const Text('端側模型', style: TextStyle(fontSize: 16, color: C.textHigh)),
                 const SizedBox(height: 6),

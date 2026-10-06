@@ -14,6 +14,8 @@ import 'package:flutter_gemma/flutter_gemma.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path_provider/path_provider.dart';
 
+import 'rules.dart';
+
 const String kModelUrl =
     'https://huggingface.co/litert-community/Qwen2.5-1.5B-Instruct/resolve/main/'
     'Qwen2.5-1.5B-Instruct_multi-prefill-seq_q8_ekv4096.litertlm';
@@ -265,9 +267,22 @@ class Slm extends ChangeNotifier {
       loadTime = sw.elapsed;
       _set(SlmPhase.ready,
           '$backend　載入 ${(sw.elapsed.inMilliseconds / 1000).toStringAsFixed(1)} s');
+      _warmUp();
     } catch (e) {
       _set(SlmPhase.error, '載入失敗：$e');
     }
+  }
+
+  /// 暖機：載入後先空跑一句。實機第一次措辭要 6–7 秒（GPU 初次編譯），
+  /// 先在背景吃掉這段，錄影時的第一句才不會特別慢。真正的措辭會排在它後面。
+  void _warmUp() {
+    const s = {'co2': 420, 'trend': '→', 't_in': 26, 't_out': 34, 'recirc': '內', 'occ': 2, 'speed': 50};
+    final sw = Stopwatch()..start();
+    phrase(renderPrompt(s, decideCabin(s))).then((_) {
+      detail = '$backend　載入 ${(loadTime!.inMilliseconds / 1000).toStringAsFixed(1)} s・'
+          '暖機 ${(sw.elapsedMilliseconds / 1000).toStringAsFixed(1)} s';
+      notifyListeners();
+    }, onError: (_) {});
   }
 
   /// 措辭一句。呼叫會排隊，一次只跑一個 session（slm_probe 的參數：topK 1、temp 0.2、seed 42）

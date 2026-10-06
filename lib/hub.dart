@@ -34,6 +34,7 @@ class _Utterance {
   int? ms;
   String? rejected; // 模型輸出被 guard 擋下的原因
   String? rawModel;
+  bool spoken = false;
   _Utterance(this.key);
 }
 
@@ -81,6 +82,9 @@ class Hub extends ChangeNotifier {
   List<String> myIps = [];
   int get clientCount => _clients.length;
   String? serverError;
+
+  /// 句子定案時呼叫一次（中控接到語音；測試環境不接）。urgent＝安全級
+  void Function(String text, bool urgent)? onSpeak;
 
   bool get running => _tick != null;
 
@@ -322,6 +326,16 @@ class Hub extends ChangeNotifier {
       u = _utt;
     }
 
+    // 告知的 8 秒從「句子出來」才開始算：實機 SLM 措辭要 6–7 秒，不然句子只露臉一下就收掉
+    if (_inform != null && identical(d, _inform) && u?.text == null) {
+      _informUntil = now.add(const Duration(seconds: 8));
+    }
+
+    if (u != null && u.text != null && !u.spoken) {
+      u.spoken = true;
+      onSpeak?.call(u.text!, d.urgency == Urgency.safety);
+    }
+
     final env = Envelope(
       eventId: 'evt_${(++_seq).toString().padLeft(6, '0')}',
       ts: now.millisecondsSinceEpoch / 1000.0,
@@ -413,7 +427,7 @@ class Hub extends ChangeNotifier {
 String sceneName(Scene s) => const {
       Scene.normal: 'A 一切正常',
       Scene.co2Rising: 'B CO₂ 上升',
-      Scene.recircOut: '駕駛切外循環',
+      Scene.recircOut: '手動切外循環',
       Scene.parked: 'D 停車',
     }[s]!;
 

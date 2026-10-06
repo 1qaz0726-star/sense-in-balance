@@ -11,6 +11,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test('四個情境經 WebSocket 送到儀表端', () async {
+    final spoken = <(String, bool)>[];
+    Hub.I.onSpeak = (t, urgent) => spoken.add((t, urgent));
     await Hub.I.start();
     final ws = await WebSocket.connect('ws://127.0.0.1:$kWsPort');
     final got = <Envelope>[];
@@ -75,6 +77,14 @@ void main() {
     final d2 = await waitFor((e) =>
         e.domain == 'query' && e.state['question'] == '冷氣濾網多久換一次？');
     expect(d2.phrase, '這個我查不到，請參考車主手冊');
+
+    // 語音：每句只念一次；只有安全級會打斷；silent 不念
+    expect(spoken, [
+      ('已換外循環，會稍熱', false),
+      ('右後方有機車', true),
+      (d1.phrase!, false),
+      ('這個我查不到，請參考車主手冊', false),
+    ]);
 
     await sub.cancel();
     await ws.close();
