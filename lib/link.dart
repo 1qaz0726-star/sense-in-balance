@@ -26,6 +26,18 @@ class Link extends ChangeNotifier {
   final Set<String> discovered = {};
   final Set<String> _seen = {};
 
+  /// 儀表＋AI Box 同一台：固定連自己，不存檔、不被 UDP 廣播改掉
+  bool pinned = false;
+  void pinLocal() {
+    pinned = true;
+    host = '127.0.0.1';
+  }
+
+  void unpin() {
+    pinned = false;
+    host = null;
+  }
+
   WebSocket? _ws;
   Timer? _retry, _watch;
   RawDatagramSocket? _udp;
@@ -129,7 +141,7 @@ class Link extends ChangeNotifier {
         final ip = dg.address.address;
         if (discovered.add(ip)) notifyListeners();
         // 還沒設過位址、或記住的位址連不上（換了網路），就改用廣播找到的中控
-        if (host == null || (!connected && host != ip)) useHost(ip);
+        if (!pinned && (host == null || (!connected && host != ip))) useHost(ip);
       });
     } catch (_) {
       // 有些手機收不到 UDP 廣播（需 multicast lock）—— 手動輸入 IP 一樣能用

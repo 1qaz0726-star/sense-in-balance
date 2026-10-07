@@ -43,3 +43,6 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# 網頁版中控打包產物（tool/pack_web.py 產生，建 APK 前要先跑）
+/assets/web/

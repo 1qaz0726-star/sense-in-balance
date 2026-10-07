@@ -7,6 +7,7 @@ import 'dart:io';
 
 import 'package:cockpit_hmi/hub.dart';
 import 'package:cockpit_hmi/protocol.dart';
+import 'package:cockpit_hmi/remote_source.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -90,4 +91,75 @@ void main() {
     await ws.close();
     await Hub.I.stop();
   }, timeout: const Timeout(Duration(seconds: 90)));
+
+  // 網頁版中控（iPad）經 /center 連 Hub：收得到事件與狀態、指令送得回去；
+  // 儀表（/）收不到狀態訊息；Hub 能提供網頁檔案。用的是網頁版同一個 RemoteSource。
+  test('網頁中控：事件、狀態、指令、網頁檔案', () async {
+    var voiceCmd = <String, dynamic>{};
+    Hub.I.webAsset = (p) async => p == 'index.html' ? utf8.encode('<html>ok</html>') : null;
+    Hub.I.statusExtra = () => {'model': '測試模型', 'voice': '測試語音', 'voice_on': true};
+    Hub.I.onCommand = (m) => voiceCmd = m;
+    await Hub.I.start();
+
+    // 儀表（/）只收信封
+    final dash = await WebSocket.connect('ws://127.0.0.1:$kWsPort');
+    final dashMsgs = <Map>[];
+    final dsub = dash.listen((m) => dashMsgs.add(jsonDecode(m)));
+
+    final src = RemoteSource(Uri.parse('ws://127.0.0.1:$kWsPort/center'));
+    final got = <Envelope>[];
+    final sub = src.events.listen(got.add);
+    await src.start();
+
+    Future<void> until(bool Function() f, {int secs = 10}) async {
+      final end = DateTime.now().add(Duration(seconds: secs));
+      while (!f()) {
+        if (DateTime.now().isAfter(end)) throw TimeoutException('等不到');
+        await Future.delayed(const Duration(milliseconds: 100));
+      }
+    }
+
+    await until(() => got.isNotEmpty && src.modelText == '測試模型');
+    expect(src.lamp, Avail.ok);
+    expect(src.hint, isNull);
+    expect(Hub.I.centerCount, 1);
+
+    // 指令：情境、盲點、提問、語音開關
+    src.setScene(Scene.co2Rising);
+    await until(() => Hub.I.scene == Scene.co2Rising);
+    src.injectBlindSpot(side: 'left', object: '自行車', seconds: 2);
+    await until(() => got.any((e) => e.domain == 'blind_spot' && e.state['side'] == 'left'));
+    src.setScene(Scene.parked);
+    await until(() => got.any((e) => e.speed == 0));
+    src.ask('為什麼要換氣？');
+    await until(() => got.any((e) => e.domain == 'query'));
+    src.setVoice(false);
+    await until(() => voiceCmd['cmd'] == 'voice');
+    expect(voiceCmd['on'], false);
+    expect(src.log.any((l) => l.contains('網頁中控連上')), isTrue);
+
+    // 儀表沒收到任何狀態訊息
+    expect(dashMsgs, isNotEmpty);
+    expect(dashMsgs.where((m) => m['type'] == 'status'), isEmpty);
+
+    // 網頁檔案
+    final c = HttpClient();
+    final r1 = await (await c.getUrl(Uri.parse('http://127.0.0.1:$kWsPort/'))).close();
+    expect(r1.statusCode, 200);
+    expect(r1.headers.contentType?.mimeType, 'text/html');
+    expect(await utf8.decodeStream(r1), '<html>ok</html>');
+    final r2 = await (await c.getUrl(Uri.parse('http://127.0.0.1:$kWsPort/nope.js'))).close();
+    expect(r2.statusCode, 404);
+    await r2.drain();
+    c.close();
+
+    await sub.cancel();
+    await dsub.cancel();
+    await src.stop();
+    await dash.close();
+    Hub.I.webAsset = null;
+    Hub.I.statusExtra = null;
+    Hub.I.onCommand = null;
+    await Hub.I.stop();
+  }, timeout: const Timeout(Duration(seconds: 60)));
 }

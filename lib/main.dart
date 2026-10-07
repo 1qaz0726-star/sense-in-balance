@@ -16,9 +16,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'box_dash.dart';
 import 'center.dart';
 import 'common.dart';
 import 'dash.dart';
+import 'local_source.dart';
+import 'setup.dart';
 import 'slm.dart';
 
 Future<void> main() async {
@@ -72,7 +75,18 @@ class ModePicker extends StatelessWidget {
                   _btn(context, s, btnW, '數位儀表', '手機・駕駛正前方',
                       () => const DashScreen()),
                   _btn(context, s, btnW, '中控', '平板・含 AI 與模型',
-                      () => const CenterScreen()),
+                      () => CenterScreen(
+                            source: LocalSource(),
+                            modelSetup: () => const ModelSetupPage(),
+                            onStarted: (c) {
+                              if (Slm.I.phase == SlmPhase.missing) {
+                                Navigator.of(c).push(MaterialPageRoute(
+                                    builder: (_) => const ModelSetupPage()));
+                              }
+                            },
+                          )),
+                  _btn(context, s, btnW, '儀表＋AI Box', '手機・配 iPad 網頁中控',
+                      () => const BoxDashScreen()),
                 ],
               ),
               SizedBox(height: s.gap * 2),

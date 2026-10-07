@@ -19,12 +19,12 @@ import 'protocol.dart';
 import 'rules.dart';
 import 'slm.dart';
 
+export 'protocol.dart' show Scene, sceneName;
+
 const int kWsPort = 8765;
 const int kBeaconPort = 8766;
 const String kBeaconTag = 'COCKPIT_HUB';
 
-/// 情境 —— 對應影片腳本 A–D（研究/八天衝刺計畫_報名影片_20260929.md §四）
-enum Scene { normal, co2Rising, recircOut, parked }
 
 /// 一句話的措辭結果，跟著 decision.key 走：數值在變、動作沒變，就不重講
 class _Utterance {
@@ -86,6 +86,21 @@ class Hub extends ChangeNotifier {
   /// 句子定案時呼叫一次（中控接到語音；測試環境不接）。urgent＝安全級
   void Function(String text, bool urgent)? onSpeak;
 
+  // ─── 網頁版中控（2026-10-07：iPad 用 Safari 當中控，AI 留在這台）───
+  // iPad 連 ws://<這台>:8765/center：收事件＋狀態，送情境／提問指令回來。
+  // 儀表連的是 /，兩種用戶端分開，儀表收不到狀態訊息（它會當成格式錯誤而降級）。
+  final Set<WebSocket> _centers = {};
+  int get centerCount => _centers.length;
+
+  /// 網頁檔案來源（App 層用 rootBundle 讀 assets/web/）；null＝不提供網頁
+  Future<List<int>?> Function(String path)? webAsset;
+
+  /// 控制面板要看的額外狀態（模型、語音），由 App 層提供
+  Map<String, dynamic> Function()? statusExtra;
+
+  /// Hub 自己不處理的指令（例如語音開關）交給 App 層
+  void Function(Map<String, dynamic> cmd)? onCommand;
+
   bool get running => _tick != null;
 
   Future<void> start() async {
@@ -103,10 +118,11 @@ class Hub extends ChangeNotifier {
     _beaconTimer?.cancel();
     _beacon?.close();
     _beacon = null;
-    for (final c in _clients.toList()) {
+    for (final c in [..._clients, ..._centers]) {
       await c.close();
     }
     _clients.clear();
+    _centers.clear();
     await _server?.close(force: true);
     _server = null;
   }
@@ -117,13 +133,14 @@ class Hub extends ChangeNotifier {
       serverError = null;
       _server!.listen((req) async {
         if (!WebSocketTransformer.isUpgradeRequest(req)) {
-          req.response
-            ..statusCode = 200
-            ..write('cockpit hub ok, clients=${_clients.length}');
-          await req.response.close();
+          await _serveHttp(req);
           return;
         }
         final ws = await WebSocketTransformer.upgrade(req);
+        if (req.uri.path == '/center') {
+          _addCenter(ws, req);
+          return;
+        }
         _clients.add(ws);
         _note('儀表連上（${req.connectionInfo?.remoteAddress.address}）');
         if (last != null) ws.add(jsonEncode(last!.toJson()));
@@ -137,6 +154,95 @@ class Hub extends ChangeNotifier {
     }
     myIps = await localIps();
   }
+
+  static const _types = {
+    'html': 'text/html; charset=utf-8',
+    'js': 'text/javascript',
+    'mjs': 'text/javascript',
+    'wasm': 'application/wasm',
+    'json': 'application/json',
+    'css': 'text/css',
+    'png': 'image/png',
+    'ico': 'image/x-icon',
+    'otf': 'font/otf',
+    'ttf': 'font/ttf',
+    'bin': 'application/octet-stream',
+    'frag': 'application/octet-stream',
+  };
+
+  Future<void> _serveHttp(HttpRequest req) async {
+    final res = req.response;
+    try {
+      var path = Uri.decodeComponent(req.uri.path);
+      if (path.isEmpty || path == '/') path = '/index.html';
+      path = path.substring(1);
+      final bytes = (webAsset == null || path.contains('..'))
+          ? null
+          : await webAsset!(path);
+      if (bytes == null) {
+        res.statusCode = webAsset == null ? 200 : 404;
+        res.headers.contentType = ContentType.text;
+        res.write('cockpit hub ok, dash=${_clients.length} center=${_centers.length}');
+      } else {
+        final ext = path.split('.').last.toLowerCase();
+        res.headers.set('Content-Type', _types[ext] ?? 'application/octet-stream');
+        res.headers.set('Cache-Control', 'no-cache');
+        res.add(bytes);
+      }
+    } catch (_) {
+      res.statusCode = 500;
+    }
+    await res.close();
+  }
+
+  void _addCenter(WebSocket ws, HttpRequest req) {
+    _centers.add(ws);
+    _note('網頁中控連上（${req.connectionInfo?.remoteAddress.address}）');
+    if (last != null) ws.add(jsonEncode(last!.toJson()));
+    ws.add(jsonEncode(statusJson()));
+    ws.listen((m) {
+      try {
+        final j = jsonDecode('$m');
+        if (j is Map) command(Map<String, dynamic>.from(j));
+      } catch (_) {}
+    }, onDone: () {
+      _centers.remove(ws);
+      _note('網頁中控斷線');
+    }, onError: (_) => _centers.remove(ws));
+  }
+
+  /// 網頁中控送來的指令
+  void command(Map<String, dynamic> m) {
+    switch (m['cmd']) {
+      case 'scene':
+        final sc = Scene.values.where((e) => e.name == m['scene']);
+        if (sc.isNotEmpty) setScene(sc.first);
+      case 'blind':
+        injectBlindSpot(
+          side: '${m['side'] ?? 'right'}',
+          object: '${m['object'] ?? '機車'}',
+          seconds: (m['seconds'] as num?)?.round() ?? 4,
+        );
+      case 'ask':
+        ask('${m['q'] ?? ''}');
+      case 'dismiss':
+        dismissReply();
+      default:
+        onCommand?.call(m);
+    }
+  }
+
+  /// 給網頁中控控制面板的狀態（每秒跟著事件送一次）
+  Map<String, dynamic> statusJson() => {
+        'type': 'status',
+        'log': log.take(40).toList(),
+        'ips': myIps,
+        'port': kWsPort,
+        'dash': _clients.length,
+        'centers': _centers.length,
+        'server_error': serverError,
+        ...?statusExtra?.call(),
+      };
 
   Future<void> _startBeacon() async {
     try {
@@ -359,6 +465,18 @@ class Hub extends ChangeNotifier {
         _clients.remove(c);
       }
     }
+    if (_centers.isNotEmpty) {
+      final st = jsonEncode(statusJson());
+      for (final c in _centers.toList()) {
+        try {
+          c
+            ..add(js)
+            ..add(st);
+        } catch (_) {
+          _centers.remove(c);
+        }
+      }
+    }
     notifyListeners();
   }
 
@@ -423,13 +541,6 @@ class Hub extends ChangeNotifier {
     };
   }
 }
-
-String sceneName(Scene s) => const {
-      Scene.normal: 'A 一切正常',
-      Scene.co2Rising: 'B CO₂ 上升',
-      Scene.recircOut: '手動切外循環',
-      Scene.parked: 'D 停車',
-    }[s]!;
 
 Future<List<String>> localIps() async {
   try {

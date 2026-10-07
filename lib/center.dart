@@ -1,7 +1,10 @@
 // 中控（平板）—— 地圖為底，事件只在有話要說時以浮層出現
 //   左上 = 時速與狀態   右上 = 導航   底部 = 輸入列
 //
-// 同時是 AI Box：進這個畫面就啟動 Hub（規則引擎＋模擬訊號＋WebSocket）與 SLM。
+// 資料來源（center_source.dart）二選一：
+//   LocalSource  平板一台全包，進畫面就啟動 Hub（規則引擎＋模擬訊號＋WebSocket）與 SLM
+//   RemoteSource iPad 網頁版，連另一台的 Hub；畫面一模一樣
+// 這個檔案不能 import dart:io／模型／語音 —— 網頁版要能編譯。
 // 右上角的小圓點打開控制面板（情境注入、模型、連線資訊、紀錄）—— 拍片時收起來就看不到。
 
 import 'dart:async';
@@ -10,15 +13,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
+import 'center_source.dart';
 import 'common.dart';
-import 'hub.dart';
 import 'protocol.dart';
-import 'setup.dart';
-import 'slm.dart';
-import 'voice.dart';
 
 class CenterScreen extends StatefulWidget {
-  const CenterScreen({super.key});
+  final CenterSource source;
+
+  /// 模型設定頁（只有本機 AI Box 才有）
+  final Widget Function()? modelSetup;
+
+  /// 啟動完成後（例如：本機沒有模型 → 開設定頁）
+  final void Function(BuildContext context)? onStarted;
+
+  const CenterScreen(
+      {super.key, required this.source, this.modelSetup, this.onStarted});
   @override
   State<CenterScreen> createState() => _CenterScreenState();
 }
@@ -31,22 +40,22 @@ class _CenterScreenState extends State<CenterScreen> {
   Timer? _script;
   String? _scriptStep;
 
+  CenterSource get src => widget.source;
+
   @override
   void initState() {
     super.initState();
-    Voice.I.init();
-    Hub.I.onSpeak = (t, urgent) => Voice.I.say(t, urgent: urgent);
-    Hub.I.start();
-    _sub = Hub.I.events.listen((e) {
+    _sub = src.events.listen((e) {
       if (mounted) setState(() => ev = e);
     });
-    Slm.I.boot().then((_) {
-      if (!mounted) return;
-      if (Slm.I.phase == SlmPhase.missing) {
-        Navigator.of(context)
-            .push(MaterialPageRoute(builder: (_) => const ModelSetupPage()));
-      }
+    src.addListener(_onSrc);
+    src.start().then((_) {
+      if (mounted) widget.onStarted?.call(context);
     });
+  }
+
+  void _onSrc() {
+    if (mounted) setState(() {});
   }
 
   @override
@@ -54,8 +63,8 @@ class _CenterScreenState extends State<CenterScreen> {
     _script?.cancel();
     _sub?.cancel();
     _q.dispose();
-    Hub.I.onSpeak = null;
-    Hub.I.stop();
+    src.removeListener(_onSrc);
+    src.stop();
     super.dispose();
   }
 
@@ -63,12 +72,12 @@ class _CenterScreenState extends State<CenterScreen> {
   void _runScript() {
     _script?.cancel();
     final steps = <(String, int, void Function())>[
-      ('A 一切正常', 8, () => Hub.I.setScene(Scene.normal)),
-      ('B CO₂ 上升→系統自動換氣', 20, () => Hub.I.setScene(Scene.co2Rising)),
-      ('C 右後方機車', 8, () => Hub.I.injectBlindSpot()),
+      ('A 一切正常', 8, () => src.setScene(Scene.normal)),
+      ('B CO₂ 上升→系統自動換氣', 20, () => src.setScene(Scene.co2Rising)),
+      ('C 右後方機車', 8, () => src.injectBlindSpot()),
       ('C′ 左後方自行車', 8,
-          () => Hub.I.injectBlindSpot(side: 'left', object: '自行車')),
-      ('D 停車問答', 0, () => Hub.I.setScene(Scene.parked)),
+          () => src.injectBlindSpot(side: 'left', object: '自行車')),
+      ('D 停車問答', 0, () => src.setScene(Scene.parked)),
     ];
     var i = 0;
     void next() {
@@ -99,7 +108,7 @@ class _CenterScreenState extends State<CenterScreen> {
     if (t.isEmpty) return;
     FocusScope.of(context).unfocus();
     _q.clear();
-    Hub.I.ask(t);
+    src.ask(t);
   }
 
   @override
@@ -113,6 +122,8 @@ class _CenterScreenState extends State<CenterScreen> {
       key: _scaffold,
       resizeToAvoidBottomInset: true,
       endDrawer: _ControlPanel(
+        source: src,
+        modelSetup: widget.modelSetup,
         scriptStep: _scriptStep,
         onScript: _runScript,
         onStopScript: _stopScript,
@@ -153,6 +164,12 @@ class _CenterScreenState extends State<CenterScreen> {
                   ],
                 ),
                 const Spacer(),
+                if (src.hint != null)
+                  Center(
+                    child: Text(src.hint!,
+                        style: TextStyle(fontSize: s.cardBody, color: C.textLow)),
+                  ),
+                if (src.hint != null) const Spacer(),
                 if (e != null && u != Urgency.silent) _overlay(s, e),
                 if (e != null && u != Urgency.silent) SizedBox(height: s.gap),
                 if (parked && u != Urgency.reply) ...[
@@ -192,6 +209,7 @@ class _CenterScreenState extends State<CenterScreen> {
   // 圖磚：flutter_map 8 會自動快取看過的圖磚，先連網開過一次，之後飛航模式也顯示得出來
   Widget _map() => FlutterMap(
         options: const MapOptions(
+          backgroundColor: C.bg, // 圖磚還沒載入的地方不要露出亮灰色
           initialCenter: LatLng(22.7336, 120.2836), // 高雄
           initialZoom: 15.5,
           interactionOptions:
@@ -244,7 +262,7 @@ class _CenterScreenState extends State<CenterScreen> {
                         style: TextStyle(fontSize: s.label, color: C.textLow)),
                   ]),
               SizedBox(height: s.gap * 0.5),
-              AvailLamp(e?.availability ?? Avail.down),
+              AvailLamp(src.lamp),
             ]),
       );
 
@@ -327,7 +345,7 @@ class _CenterScreenState extends State<CenterScreen> {
         if (isReply)
           IconButton(
             icon: Icon(Icons.close, color: C.textLow, size: s.cardBody * 1.2),
-            onPressed: Hub.I.dismissReply,
+            onPressed: src.dismissReply,
           ),
       ]),
     );
@@ -414,10 +432,14 @@ class _CenterScreenState extends State<CenterScreen> {
 // 控制面板（右側抽屜）—— 給操作的人看，不是給駕駛看
 // ─────────────────────────────────────────────────────────────
 class _ControlPanel extends StatelessWidget {
+  final CenterSource source;
+  final Widget Function()? modelSetup;
   final String? scriptStep;
   final VoidCallback onScript, onStopScript;
   const _ControlPanel(
-      {required this.scriptStep,
+      {required this.source,
+      required this.modelSetup,
+      required this.scriptStep,
       required this.onScript,
       required this.onStopScript});
 
@@ -428,10 +450,9 @@ class _ControlPanel extends StatelessWidget {
       backgroundColor: C.surface,
       child: SafeArea(
         child: ListenableBuilder(
-          listenable: Listenable.merge([Hub.I, Slm.I, Voice.I]),
+          listenable: source,
           builder: (context, _) {
-            final h = Hub.I;
-            final m = Slm.I;
+            final h = source;
             final e = h.last;
             Widget sceneBtn(String label, VoidCallback f) => Padding(
                   padding: const EdgeInsets.only(bottom: 6),
@@ -468,28 +489,27 @@ class _ControlPanel extends StatelessWidget {
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('語音播報', style: TextStyle(fontSize: 16, color: C.textHigh)),
-                  subtitle: Text(Voice.I.status, style: const TextStyle(color: C.textLow)),
-                  value: Voice.I.enabled,
-                  onChanged: Voice.I.toggle,
+                  subtitle: Text(h.voiceText, style: const TextStyle(color: C.textLow)),
+                  value: h.voiceOn,
+                  onChanged: h.setVoice,
                 ),
                 const Divider(height: 28),
                 const Text('端側模型', style: TextStyle(fontSize: 16, color: C.textHigh)),
                 const SizedBox(height: 6),
-                Text(modelStatusText(m),
+                Text(h.modelText,
                     style: const TextStyle(color: C.textLow, height: 1.4)),
-                const SizedBox(height: 6),
-                OutlinedButton(
-                  onPressed: () => Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const ModelSetupPage())),
-                  child: const Text('模型設定／下載'),
-                ),
+                if (modelSetup != null) ...[
+                  const SizedBox(height: 6),
+                  OutlinedButton(
+                    onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => modelSetup!())),
+                    child: const Text('模型設定／下載'),
+                  ),
+                ],
                 const Divider(height: 28),
                 const Text('連線', style: TextStyle(fontSize: 16, color: C.textHigh)),
                 const SizedBox(height: 6),
-                Text(
-                    '儀表請連：${h.myIps.isEmpty ? '（取得 IP 中…）' : h.myIps.join('、')}\n'
-                    '埠號 $kWsPort・已連上 ${h.clientCount} 台'
-                    '${h.serverError == null ? '' : '\n⚠️ 伺服器啟動失敗：${h.serverError}'}',
+                Text(h.connText,
                     style: const TextStyle(color: C.textLow, height: 1.4)),
                 const Divider(height: 28),
                 const Text('目前事件', style: TextStyle(fontSize: 16, color: C.textHigh)),

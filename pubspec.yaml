@@ -41,6 +41,7 @@ dependencies:
   path_provider: ^2.1.5
   file_picker: ^8.1.7
   flutter_tts: ^4.2.5
+  web_socket_channel: ^3.0.3
 
 dev_dependencies:
   flutter_test:
@@ -63,6 +64,18 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+  # web-assets-begin（tool/pack_web.py 產生，不要手改）
+  assets:
+    - assets/web/
+    - assets/web/assets/
+    - assets/web/assets/fonts/
+    - assets/web/assets/packages/cupertino_icons/assets/
+    - assets/web/assets/packages/flutter_map/lib/assets/
+    - assets/web/assets/shaders/
+    - assets/web/canvaskit/
+    - assets/web/canvaskit/chromium/
+    - assets/web/icons/
+  # web-assets-end
 
   # To add assets to your application, add an assets section, like this:
   # assets:

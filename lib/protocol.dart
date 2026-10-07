@@ -10,6 +10,16 @@
 
 const String kSchema = '1.0';
 
+/// 情境 —— 對應影片腳本 A–D（中控與網頁版中控共用，所以放在這個不依賴 dart:io 的檔案）
+enum Scene { normal, co2Rising, recircOut, parked }
+
+String sceneName(Scene s) => const {
+      Scene.normal: 'A 一切正常',
+      Scene.co2Rising: 'B CO₂ 上升',
+      Scene.recircOut: '手動切外循環',
+      Scene.parked: 'D 停車',
+    }[s]!;
+
 enum Urgency { safety, proactive, reply, silent }
 
 extension UrgencyX on Urgency {
