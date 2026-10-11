@@ -54,6 +54,10 @@ python tool/pack_web.py
 flutter build apk --release
 ```
 
+不打包網頁版也能建置和執行，只是 iPad 連進來時沒有中控畫面。打包後 `pubspec.yaml` 會多出一段 `web-assets` 資產清單，那段不要 commit。
+
+Windows 使用者名稱如果有中文，`flutter test` 可能出現「Could not prepare isolate」錯誤，先把暫存資料夾改到英文路徑再跑：`set TEMP=C:\tmp`（PowerShell：`$env:TEMP='C:\tmp'`）。
+
 第一次開啟 App 時，會從 Hugging Face（`litert-community/Qwen2.5-1.5B-Instruct`）下載模型檔，也可以手動匯入 `.litertlm`。APK 裡不含模型，也不含任何 API Key。
 
 已建置好的 APK 放在 [Releases](../../releases)。
