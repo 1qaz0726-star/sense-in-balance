@@ -1,0 +1,11 @@
+{
+  "name": "remotion-hmi",
+  "private": true,
+  "scripts": { "studio": "remotion studio", "render": "remotion render" },
+  "dependencies": {
+    "@remotion/cli": "4.0.534",
+    "remotion": "4.0.534",
+    "react": "19.1.0",
+    "react-dom": "19.1.0"
+  }
+}

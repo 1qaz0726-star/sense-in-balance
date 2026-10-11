@@ -1,0 +1,101 @@
+[
+  {
+    "schema": "1.0",
+    "event_id": "evt_000001",
+    "ts": 1790000000.0,
+    "source": "L1",
+    "domain": "cabin_air",
+    "state": {
+      "co2": 420,
+      "co2_label": "正常",
+      "trend": "→",
+      "trend_label": "持平",
+      "t_in": 22,
+      "t_out": 24,
+      "recirc": "外",
+      "occ": 1,
+      "speed": 35
+    },
+    "decision": {
+      "action": "維持現狀",
+      "urgency": "silent",
+      "limit": 0,
+      "reason": "各項數值正常",
+      "cost": ""
+    },
+    "availability": "ok"
+  },
+  {
+    "schema": "1.0",
+    "event_id": "evt_000002",
+    "ts": 1790000001.0,
+    "source": "L1",
+    "domain": "cabin_air",
+    "state": {
+      "co2": 1980,
+      "co2_label": "高",
+      "trend": "↑",
+      "trend_label": "上升",
+      "t_in": 26,
+      "t_out": 31,
+      "recirc": "內",
+      "occ": 2,
+      "speed": 90
+    },
+    "decision": {
+      "action": "切換外循環",
+      "urgency": "proactive",
+      "limit": 15,
+      "reason": "CO2 1980 偏高且仍在上升",
+      "cost": ""
+    },
+    "availability": "ok"
+  },
+  {
+    "schema": "1.0",
+    "event_id": "evt_000003",
+    "ts": 1790000002.0,
+    "source": "L2",
+    "domain": "blind_spot",
+    "state": {
+      "side": "right",
+      "object": "機車",
+      "ttc_s": 1.8,
+      "speed": 45,
+      "bbox": [
+        0.62,
+        0.41,
+        0.19,
+        0.33
+      ],
+      "confidence": 0.87
+    },
+    "decision": {
+      "action": "注意右後方機車",
+      "urgency": "safety",
+      "limit": 8,
+      "reason": "右側偵測到機車",
+      "cost": ""
+    },
+    "availability": "ok"
+  },
+  {
+    "schema": "1.0",
+    "event_id": "evt_000004",
+    "ts": 1790000003.0,
+    "source": "L1",
+    "domain": "query",
+    "state": {
+      "question": "冷氣濾網多久換一次？",
+      "online": false
+    },
+    "decision": {
+      "action": "這個我查不到，請參考車主手冊",
+      "urgency": "reply",
+      "limit": 30,
+      "reason": "本地知識庫檢索",
+      "cost": ""
+    },
+    "availability": "degraded"
+  }
+]

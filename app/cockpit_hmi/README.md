@@ -1,16 +1,3 @@
-# cockpit_hmi
+# 座艙 HMI App
 
-A new Flutter project.
-
-## Getting Started
-
-This project is a starting point for a Flutter application.
-
-A few resources to get you started if this is your first Flutter project:
-
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+規則引擎、端側 SLM 措辭與檢查器、知識庫、WebSocket 雙屏同步、數位儀表、中控、網頁版中控。說明見[專案首頁](../../README.md)。
