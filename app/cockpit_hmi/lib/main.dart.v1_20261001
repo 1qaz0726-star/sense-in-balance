@@ -1,0 +1,587 @@
+// 座艙 HMI 原型 — 雙螢幕（數位儀表 / 中控）
+//
+// 本檔案由 Claude 於 2026-10-01 撰寫，供設計檢驗用。
+// 事件結構依 INTERFACE.md v1.0；本版以腳本化回放取代 WebSocket，
+// 目的是讓介面本身可被檢驗，不是功能 Demo。
+//
+// ⚠️ 語音與導航在本版只有「介面狀態」，沒有後端。
+//    離線 zh-TW 語音辨識與離線導航的可行性查核尚未完成。
+
+import 'dart:async';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+// ─────────────────────────────────────────────────────────────
+// 設計權杖（Design tokens）
+// 這些數值待《查核_車用HMI設計規範》完成後依實證調整。
+// 現值為暫定，依據：夜間駕駛以深色底、資訊以尺寸分層、顏色只承載語意。
+// ─────────────────────────────────────────────────────────────
+class T {
+  // 色彩：極簡 — 底色一階、文字兩階、語意色只有三個
+  static const bg = Color(0xFF0B0B0D); // 近黑，非純黑
+  static const surface = Color(0xFF17171B);
+  static const textHigh = Color(0xFFF2F2F4);
+  static const textLow = Color(0xFF8A8A92);
+  static const divider = Color(0xFF3A3A42); // 原 #26262C 於卡片上僅 1.19:1，近乎不可見
+
+  // 語意色：只有這三個，不作裝飾用途
+  // 安全級用兩個紅：深底上的強調色，與全屏警示的底色。
+  // 依 ISO 15008:2017 夜間對比門檻 5:1 實測選定（2026-10-01）：
+  //   safety   #FF4D4D 於 surface #17171B 上 = 5.47:1  PASS
+  //   safetyBg #C62828 配白字              = 5.62:1  PASS
+  //   （原用 #FF4D4D 當全屏底，白字僅 3.27:1，未達夜間門檻）
+  static const safety = Color(0xFFFF4D4D);
+  static const safetyBg = Color(0xFFC62828);
+  static const ok = Color(0xFF3DD68C);
+  static const degraded = Color(0xFFFFC14D);
+
+  // 字級：以尺寸分層，不以顏色分層
+  static const dashHero = 64.0;
+  static const dashSpeed = 88.0;
+  static const cardTitle = 34.0;
+  static const cardBody = 22.0;
+  static const label = 15.0;
+
+  // 間距
+  static const gap = 20.0;
+  static const pad = 28.0;
+  static const touchMin = 64.0; // 車用觸控目標應大於手機慣例
+}
+
+// ─────────────────────────────────────────────────────────────
+// 事件模型（對應 INTERFACE.md §2）
+// ─────────────────────────────────────────────────────────────
+enum Urgency { safety, proactive, reply, silent }
+
+enum Avail { ok, degraded, down }
+
+class CockpitEvent {
+  final String id;
+  final String domain;
+  final Urgency urgency;
+  final String action;
+  final String reason;
+  final String cost;
+  final String phrase;
+  final Avail availability;
+  final Map<String, String> state;
+
+  const CockpitEvent({
+    required this.id,
+    required this.domain,
+    required this.urgency,
+    required this.action,
+    this.reason = '',
+    this.cost = '',
+    this.phrase = '',
+    this.availability = Avail.ok,
+    this.state = const {},
+  });
+}
+
+// 腳本化回放：涵蓋四級緊急度 ＋ 一次降級
+const List<CockpitEvent> kScript = [
+  CockpitEvent(
+    id: 'evt_000001',
+    domain: 'cabin_air',
+    urgency: Urgency.silent,
+    action: '維持現狀',
+    reason: '各項數值正常',
+    state: {'CO2': '420 ppm', '車內': '22°C', '車外': '24°C', '循環': '外'},
+  ),
+  CockpitEvent(
+    id: 'evt_000002',
+    domain: 'cabin_air',
+    urgency: Urgency.proactive,
+    action: '建議稍後換氣',
+    reason: 'CO2 1340 上升中',
+    phrase: '二氧化碳在升，等下記得換氣',
+    state: {'CO2': '1340 ppm ↑', '車內': '26°C', '車外': '31°C', '循環': '內'},
+  ),
+  CockpitEvent(
+    id: 'evt_000003',
+    domain: 'blind_spot',
+    urgency: Urgency.safety,
+    action: '注意右後方機車',
+    reason: '右側偵測到機車',
+    phrase: '右後有車',
+    state: {'方位': '右', '物件': '機車', '車速': '45 km/h'},
+  ),
+  CockpitEvent(
+    id: 'evt_000004',
+    domain: 'cabin_air',
+    urgency: Urgency.silent,
+    action: '維持現狀',
+    reason: '已經是外循環',
+    state: {'CO2': '2600 ppm ↓', '車內': '22°C', '車外': '24°C', '循環': '外'},
+  ),
+  CockpitEvent(
+    id: 'evt_000005',
+    domain: 'query',
+    urgency: Urgency.reply,
+    action: '這個我查不到，請參考車主手冊',
+    reason: '本地知識庫檢索',
+    phrase: '這個我查不到，請參考車主手冊',
+    availability: Avail.degraded,
+    state: {'提問': '冷氣濾網多久換一次？', '連網': '否'},
+  ),
+];
+
+void main() {
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+  runApp(const CockpitApp());
+}
+
+/// 角色可由網址參數指定（?mode=dash / ?mode=center），方便在不同尺寸下檢視版面。
+/// APK 上沒有網址，會落回選單。
+Widget _initialScreen() {
+  try {
+    final q = Uri.base.queryParameters;
+    final m = q['mode'];
+    final ev = int.tryParse(q['ev'] ?? '');
+    if (m == 'dash') return DashScreen(fixedIndex: ev);
+    if (m == 'center') return CenterScreen(fixedIndex: ev);
+  } catch (_) {}
+  return const ModePicker();
+}
+
+class CockpitApp extends StatelessWidget {
+  const CockpitApp({super.key});
+  @override
+  Widget build(BuildContext context) => MaterialApp(
+        title: '座艙 HMI',
+        debugShowCheckedModeBanner: false,
+        theme: ThemeData(
+          brightness: Brightness.dark,
+          scaffoldBackgroundColor: T.bg,
+        ),
+        home: _initialScreen(),
+      );
+}
+
+// ─────────────────────────────────────────────────────────────
+// 開機選模式：同一顆 APK 裝兩台裝置
+// ─────────────────────────────────────────────────────────────
+class ModePicker extends StatelessWidget {
+  const ModePicker({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Text('座艙 HMI 原型',
+              style: TextStyle(
+                  fontSize: 30, color: T.textHigh, letterSpacing: 2)),
+          const SizedBox(height: 8),
+          const Text('選擇這台裝置的角色',
+              style: TextStyle(fontSize: T.label, color: T.textLow)),
+          const SizedBox(height: 48),
+          Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+            _modeButton(context, '數位儀表', '駕駛正前方', const DashScreen()),
+            const SizedBox(width: T.gap),
+            _modeButton(context, '中控', '中央顯示器', const CenterScreen()),
+          ]),
+        ]),
+      ),
+    );
+  }
+
+  Widget _modeButton(BuildContext c, String title, String sub, Widget page) =>
+      InkWell(
+        onTap: () =>
+            Navigator.of(c).push(MaterialPageRoute(builder: (_) => page)),
+        child: Container(
+          width: 240,
+          height: 150,
+          decoration: BoxDecoration(
+            color: T.surface,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: T.divider),
+          ),
+          child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+            Text(title, style: const TextStyle(fontSize: 26, color: T.textHigh)),
+            const SizedBox(height: 6),
+            Text(sub,
+                style: const TextStyle(fontSize: T.label, color: T.textLow)),
+          ]),
+        ),
+      );
+}
+
+// ─────────────────────────────────────────────────────────────
+// 共用：事件回放
+// ─────────────────────────────────────────────────────────────
+mixin EventReplay<W extends StatefulWidget> on State<W> {
+  int idx = 0;
+  Timer? _t;
+
+  CockpitEvent get ev => kScript[idx];
+
+  void startReplay() {
+    _t = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (mounted) setState(() => idx = (idx + 1) % kScript.length);
+    });
+  }
+
+  void stepNext() => setState(() => idx = (idx + 1) % kScript.length);
+
+  @override
+  void dispose() {
+    _t?.cancel();
+    super.dispose();
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// 可用性指示燈（三態）— INTERFACE.md §7
+// ─────────────────────────────────────────────────────────────
+class AvailLamp extends StatelessWidget {
+  final Avail a;
+  final double size;
+  const AvailLamp(this.a, {super.key, this.size = 14});
+
+  @override
+  Widget build(BuildContext context) {
+    late Color c;
+    late String label;
+    switch (a) {
+      case Avail.ok:
+        c = T.ok;
+        label = '系統正常';
+        break;
+      case Avail.degraded:
+        c = T.degraded;
+        label = '部分降級';
+        break;
+      case Avail.down:
+        c = T.safety;
+        label = '無法判斷';
+        break;
+    }
+    return Row(mainAxisSize: MainAxisSize.min, children: [
+      Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(color: c, shape: BoxShape.circle),
+      ),
+      const SizedBox(width: 8),
+      Text(label,
+          style: const TextStyle(
+              fontSize: T.label, color: T.textLow, height: 1.1)),
+    ]);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// 數位儀表（手機）：沉默時只剩狀態燈
+// ─────────────────────────────────────────────────────────────
+class DashScreen extends StatefulWidget {
+  final int? fixedIndex;
+  const DashScreen({super.key, this.fixedIndex});
+  @override
+  State<DashScreen> createState() => _DashScreenState();
+}
+
+class _DashScreenState extends State<DashScreen> with EventReplay {
+  @override
+  void initState() {
+    super.initState();
+    if (widget.fixedIndex != null) {
+      idx = widget.fixedIndex! % kScript.length;
+    } else {
+      startReplay();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isSafety = ev.urgency == Urgency.safety;
+    final showText = ev.phrase.isNotEmpty && ev.urgency != Urgency.reply;
+
+    return Scaffold(
+      backgroundColor: isSafety ? T.safetyBg : T.bg,
+      body: GestureDetector(
+        onTap: stepNext,
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(T.pad),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Row(
+                        crossAxisAlignment: CrossAxisAlignment.baseline,
+                        textBaseline: TextBaseline.alphabetic,
+                        children: [
+                          Text('45',
+                              style: TextStyle(
+                                  fontSize: T.dashSpeed,
+                                  height: 0.9,
+                                  fontWeight: FontWeight.w300,
+                                  color: isSafety
+                                      ? Colors.white
+                                      : T.textHigh)),
+                          const SizedBox(width: 8),
+                          Text('km/h',
+                              style: TextStyle(
+                                  fontSize: T.label,
+                                  color: isSafety
+                                      ? Colors.white70
+                                      : T.textLow)),
+                        ]),
+                    AvailLamp(ev.availability),
+                  ],
+                ),
+                const Spacer(),
+                if (showText)
+                  Text(
+                    ev.phrase,
+                    style: TextStyle(
+                      fontSize: T.dashHero,
+                      height: 1.15,
+                      fontWeight: FontWeight.w500,
+                      color: isSafety ? Colors.white : T.textHigh,
+                    ),
+                  )
+                else
+                  const Text('—',
+                      style: TextStyle(
+                          fontSize: T.dashHero,
+                          color: T.divider,
+                          fontWeight: FontWeight.w300)),
+                const Spacer(),
+                Text(
+                  ev.urgency == Urgency.silent
+                      ? '系統判斷此刻不需提示'
+                      : '事件 ${ev.id}',
+                  style: TextStyle(
+                      fontSize: T.label,
+                      color: isSafety ? Colors.white70 : T.textLow),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// 中控（平板）：完整卡片 ＋ 導航 ＋ 語音
+// ─────────────────────────────────────────────────────────────
+class CenterScreen extends StatefulWidget {
+  final int? fixedIndex;
+  const CenterScreen({super.key, this.fixedIndex});
+  @override
+  State<CenterScreen> createState() => _CenterScreenState();
+}
+
+class _CenterScreenState extends State<CenterScreen> with EventReplay {
+  bool driving = true; // 依道安規則 §90：行駛中可顯示可觀看，不得操作
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.fixedIndex != null) {
+      idx = widget.fixedIndex! % kScript.length;
+    } else {
+      startReplay();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(T.pad),
+          child: Column(children: [
+            _topBar(),
+            const SizedBox(height: T.gap),
+            Expanded(
+              child:
+                  Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                Expanded(flex: 3, child: _eventCard()),
+                const SizedBox(width: T.gap),
+                Expanded(flex: 2, child: _navStrip()),
+              ]),
+            ),
+            const SizedBox(height: T.gap),
+            _bottomBar(),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  Widget _topBar() => Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          AvailLamp(ev.availability, size: 12),
+          Row(children: [
+            Text(driving ? '行駛中' : '停車中',
+                style: const TextStyle(fontSize: T.label, color: T.textLow)),
+            const SizedBox(width: T.gap),
+            GestureDetector(
+              onTap: () => setState(() => driving = !driving),
+              child: const Text('切換',
+                  style: TextStyle(fontSize: T.label, color: T.textLow)),
+            ),
+          ]),
+        ],
+      );
+
+  Widget _eventCard() {
+    final silent = ev.urgency == Urgency.silent;
+    return GestureDetector(
+      onTap: stepNext,
+      child: Container(
+        padding: const EdgeInsets.all(T.pad),
+        decoration: BoxDecoration(
+          color: T.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+              color: ev.urgency == Urgency.safety ? T.safety : T.divider,
+              width: ev.urgency == Urgency.safety ? 2 : 1),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(_domainLabel(ev.domain),
+                style: const TextStyle(fontSize: T.label, color: T.textLow)),
+            const SizedBox(height: 10),
+            Text(silent ? '一切正常' : ev.action,
+                style: TextStyle(
+                    fontSize: T.cardTitle,
+                    height: 1.2,
+                    fontWeight: FontWeight.w500,
+                    color: ev.urgency == Urgency.safety
+                        ? T.safety
+                        : T.textHigh)),
+            if (ev.reason.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text(ev.reason,
+                  style: const TextStyle(
+                      fontSize: T.cardBody, color: T.textLow, height: 1.4)),
+            ],
+            if (ev.cost.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text('代價：${ev.cost}',
+                  style:
+                      const TextStyle(fontSize: T.cardBody, color: T.textLow)),
+            ],
+            const Spacer(),
+            const Divider(color: T.divider, height: 1),
+            const SizedBox(height: 14),
+            Wrap(
+              spacing: 28,
+              runSpacing: 10,
+              children: ev.state.entries
+                  .map((e) => Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(e.key,
+                              style: const TextStyle(
+                                  fontSize: T.label, color: T.textLow)),
+                          const SizedBox(height: 2),
+                          Text(e.value,
+                              style: const TextStyle(
+                                  fontSize: T.cardBody, color: T.textHigh)),
+                        ],
+                      ))
+                  .toList(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ⚠️ 導航：本版僅為介面狀態，未接任何導航後端
+  Widget _navStrip() => Container(
+        padding: const EdgeInsets.all(T.pad),
+        decoration: BoxDecoration(
+          color: T.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: T.divider),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('導航',
+              style: TextStyle(fontSize: T.label, color: T.textLow)),
+          const SizedBox(height: 18),
+          Row(crossAxisAlignment: CrossAxisAlignment.center, children: const [
+            Icon(Icons.turn_right, size: 56, color: T.textHigh),
+            SizedBox(width: 14),
+            Expanded(
+              child: Text('中山路',
+                  style: TextStyle(fontSize: T.cardTitle, color: T.textHigh)),
+            ),
+          ]),
+          const SizedBox(height: 10),
+          const Text('400 公尺後右轉',
+              style: TextStyle(fontSize: T.cardBody, color: T.textLow)),
+          const Spacer(),
+          const Divider(color: T.divider, height: 1),
+          const SizedBox(height: 14),
+          const Text('抵達 14:28  ·  剩 12 分',
+              style: TextStyle(fontSize: T.cardBody, color: T.textLow)),
+        ]),
+      );
+
+  Widget _bottomBar() => Row(children: [
+        _voiceButton(),
+        const SizedBox(width: T.gap),
+        Expanded(
+          child: Opacity(
+            opacity: driving ? 0.35 : 1.0,
+            child: Container(
+              height: T.touchMin,
+              alignment: Alignment.centerLeft,
+              padding: const EdgeInsets.symmetric(horizontal: 22),
+              decoration: BoxDecoration(
+                color: T.surface,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: T.divider),
+              ),
+              child: Text(
+                driving ? '行駛中不開放文字輸入' : '輸入問題…',
+                style: const TextStyle(fontSize: T.cardBody, color: T.textLow),
+              ),
+            ),
+          ),
+        ),
+      ]);
+
+  Widget _voiceButton() => Container(
+        width: T.touchMin * 1.6,
+        height: T.touchMin,
+        decoration: BoxDecoration(
+          color: T.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: T.divider),
+        ),
+        child: Row(mainAxisAlignment: MainAxisAlignment.center, children: const [
+          Icon(Icons.mic_none, size: 26, color: T.textHigh),
+          SizedBox(width: 10),
+          Text('語音', style: TextStyle(fontSize: T.cardBody, color: T.textHigh)),
+        ]),
+      );
+
+  String _domainLabel(String d) {
+    switch (d) {
+      case 'cabin_air':
+        return '座艙空氣';
+      case 'blind_spot':
+        return '盲點偵測';
+      case 'query':
+        return '駕駛提問';
+      default:
+        return d;
+    }
+  }
+}
