@@ -1,0 +1,2 @@
+{"input":{"pending":{},"unresolved_text":null,"clarification":null,"user_text":"後座風小一點，音樂也小一點，導航提示不要變。"},"raw":"{\"changes\":{\"rearFan\":\"decrease\",\"mediaVolume\":\"decrease\",\"navVolume\":\"keep\"},\"clarification\":null}","elapsed_ms":2468,"error":null,"backend":"PC GGUF Q8"}
+{"input":{"pending":{"rearFan":"decrease","mediaVolume":"decrease","navVolume":"keep"},"unresolved_text":null,"clarification":null,"user_text":"風量先不用改，其餘照剛剛。"},"raw":"{\"changes\":{\"rearFan\":\"remove\"},\"clarification\":null}","elapsed_ms":427,"error":null,"backend":"PC GGUF Q8"}

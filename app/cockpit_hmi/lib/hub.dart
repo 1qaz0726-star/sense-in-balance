@@ -25,7 +25,6 @@ const int kWsPort = 8765;
 const int kBeaconPort = 8766;
 const String kBeaconTag = 'COCKPIT_HUB';
 
-
 /// 一句話的措辭結果，跟著 decision.key 走：數值在變、動作沒變，就不重講
 class _Utterance {
   final String key;
@@ -75,6 +74,9 @@ class Hub extends ChangeNotifier {
   int _seq = 0;
   _Utterance? _utt;
   Timer? _tick;
+  Timer? _blindTimer;
+  int _generation = 0;
+  int _eventGeneration = 0;
   HttpServer? _server;
   final Set<WebSocket> _clients = {};
   RawDatagramSocket? _beacon;
@@ -103,56 +105,92 @@ class Hub extends ChangeNotifier {
 
   bool get running => _tick != null;
 
-  Future<void> start() async {
+  /// Embedded demos can reuse the original events without opening another
+  /// HTTP server or discovery beacon. Existing APK roles keep networking.
+  Future<void> start({bool network = true}) async {
     if (running) return;
-    _tick = Timer.periodic(const Duration(seconds: 1), (_) => _step());
+    final generation = ++_generation;
+    _tick = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (_active(generation)) _step();
+    });
     _step();
-    await _startServer();
-    await _startBeacon();
-    notifyListeners();
+    serverError = null;
+    if (network) {
+      await _startServer(generation);
+      if (_active(generation)) await _startBeacon(generation);
+    } else {
+      myIps = [];
+    }
+    if (_active(generation)) notifyListeners();
   }
+
+  bool _active(int generation) => running && generation == _generation;
 
   Future<void> stop() async {
+    ++_generation;
     _tick?.cancel();
     _tick = null;
+    clearDemoEvents();
     _beaconTimer?.cancel();
+    _beaconTimer = null;
     _beacon?.close();
     _beacon = null;
-    for (final c in [..._clients, ..._centers]) {
-      await c.close();
-    }
+    final clients = [..._clients, ..._centers];
     _clients.clear();
     _centers.clear();
-    await _server?.close(force: true);
+    final server = _server;
     _server = null;
+    final closingServer = server?.close(force: true);
+    for (final c in clients) {
+      await c.close();
+    }
+    await closingServer;
   }
 
-  Future<void> _startServer() async {
+  Future<void> _startServer(int generation) async {
     try {
-      _server = await HttpServer.bind(InternetAddress.anyIPv4, kWsPort);
+      final server = await HttpServer.bind(InternetAddress.anyIPv4, kWsPort);
+      if (!_active(generation)) {
+        await server.close(force: true);
+        return;
+      }
+      _server = server;
       serverError = null;
-      _server!.listen((req) async {
+      server.listen((req) async {
+        if (!_active(generation)) {
+          await req.response.close();
+          return;
+        }
         if (!WebSocketTransformer.isUpgradeRequest(req)) {
           await _serveHttp(req);
           return;
         }
         final ws = await WebSocketTransformer.upgrade(req);
+        if (!_active(generation)) {
+          await ws.close();
+          return;
+        }
         if (req.uri.path == '/center') {
-          _addCenter(ws, req);
+          _addCenter(ws, req, generation);
           return;
         }
         _clients.add(ws);
         _note('儀表連上（${req.connectionInfo?.remoteAddress.address}）');
         if (last != null) ws.add(jsonEncode(last!.toJson()));
-        ws.listen((_) {}, onDone: () {
-          _clients.remove(ws);
-          _note('儀表斷線');
-        }, onError: (_) => _clients.remove(ws));
+        ws.listen(
+          (_) {},
+          onDone: () {
+            _clients.remove(ws);
+            if (_active(generation)) _note('儀表斷線');
+          },
+          onError: (_) => _clients.remove(ws),
+        );
       });
     } catch (e) {
-      serverError = '$e';
+      if (_active(generation)) serverError = '$e';
     }
-    myIps = await localIps();
+    final ips = await localIps();
+    if (_active(generation)) myIps = ips;
   }
 
   static const _types = {
@@ -182,10 +220,15 @@ class Hub extends ChangeNotifier {
       if (bytes == null) {
         res.statusCode = webAsset == null ? 200 : 404;
         res.headers.contentType = ContentType.text;
-        res.write('cockpit hub ok, dash=${_clients.length} center=${_centers.length}');
+        res.write(
+          'cockpit hub ok, dash=${_clients.length} center=${_centers.length}',
+        );
       } else {
         final ext = path.split('.').last.toLowerCase();
-        res.headers.set('Content-Type', _types[ext] ?? 'application/octet-stream');
+        res.headers.set(
+          'Content-Type',
+          _types[ext] ?? 'application/octet-stream',
+        );
         res.headers.set('Cache-Control', 'no-cache');
         res.add(bytes);
       }
@@ -195,20 +238,25 @@ class Hub extends ChangeNotifier {
     await res.close();
   }
 
-  void _addCenter(WebSocket ws, HttpRequest req) {
+  void _addCenter(WebSocket ws, HttpRequest req, int generation) {
     _centers.add(ws);
     _note('網頁中控連上（${req.connectionInfo?.remoteAddress.address}）');
     if (last != null) ws.add(jsonEncode(last!.toJson()));
     ws.add(jsonEncode(statusJson()));
-    ws.listen((m) {
-      try {
-        final j = jsonDecode('$m');
-        if (j is Map) command(Map<String, dynamic>.from(j));
-      } catch (_) {}
-    }, onDone: () {
-      _centers.remove(ws);
-      _note('網頁中控斷線');
-    }, onError: (_) => _centers.remove(ws));
+    ws.listen(
+      (m) {
+        if (!_active(generation)) return;
+        try {
+          final j = jsonDecode('$m');
+          if (j is Map) command(Map<String, dynamic>.from(j));
+        } catch (_) {}
+      },
+      onDone: () {
+        _centers.remove(ws);
+        if (_active(generation)) _note('網頁中控斷線');
+      },
+      onError: (_) => _centers.remove(ws),
+    );
   }
 
   /// 網頁中控送來的指令
@@ -234,25 +282,32 @@ class Hub extends ChangeNotifier {
 
   /// 給網頁中控控制面板的狀態（每秒跟著事件送一次）
   Map<String, dynamic> statusJson() => {
-        'type': 'status',
-        'log': log.take(40).toList(),
-        'ips': myIps,
-        'port': kWsPort,
-        'dash': _clients.length,
-        'centers': _centers.length,
-        'server_error': serverError,
-        ...?statusExtra?.call(),
-      };
+    'type': 'status',
+    'log': log.take(40).toList(),
+    'ips': myIps,
+    'port': kWsPort,
+    'dash': _clients.length,
+    'centers': _centers.length,
+    'server_error': serverError,
+    ...?statusExtra?.call(),
+  };
 
-  Future<void> _startBeacon() async {
+  Future<void> _startBeacon(int generation) async {
     try {
-      _beacon = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
-      _beacon!.broadcastEnabled = true;
+      final beacon = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
+      if (!_active(generation)) {
+        beacon.close();
+        return;
+      }
+      _beacon = beacon;
+      beacon.broadcastEnabled = true;
       _beaconTimer = Timer.periodic(const Duration(seconds: 2), (_) async {
-        myIps = await localIps();
+        final ips = await localIps();
+        if (!_active(generation) || !identical(_beacon, beacon)) return;
+        myIps = ips;
         final msg = utf8.encode('$kBeaconTag $kWsPort');
         try {
-          _beacon?.send(msg, InternetAddress('255.255.255.255'), kBeaconPort);
+          beacon.send(msg, InternetAddress('255.255.255.255'), kBeaconPort);
         } catch (_) {}
       });
     } catch (_) {}
@@ -267,6 +322,26 @@ class Hub extends ChangeNotifier {
   }
 
   // ─── 情境注入（L1） ───────────────────────────────────────
+
+  /// Clear transient demonstration events when changing to normal or parked.
+  /// This does not change the simulated cabin or the rule engine's decisions.
+  void clearDemoEvents() {
+    ++_eventGeneration;
+    _blindTimer?.cancel();
+    _blindTimer = null;
+    _blindStart = null;
+    _blindUntil = null;
+    _turnSide = null;
+    _turnUntil = null;
+    _replyUntil = null;
+    _queryState = null;
+    _queryDecision = null;
+    _queryUtt = null;
+    _inform = null;
+    _informUntil = null;
+    _utt = null;
+    _step(sim: false);
+  }
 
   void setScene(Scene s) {
     scene = s;
@@ -287,7 +362,14 @@ class Hub extends ChangeNotifier {
     _step(sim: false);
   }
 
-  void injectBlindSpot({String side = 'right', String object = '機車', int seconds = 4}) {
+  void injectBlindSpot({
+    String side = 'right',
+    String object = '機車',
+    int seconds = 4,
+  }) {
+    if (!running) return;
+    final generation = _generation;
+    _blindTimer?.cancel();
     _blindSide = side;
     _blindObj = object;
     // 典型情境：駕駛打方向燈準備變換車道 → 該側後方有來車
@@ -296,7 +378,10 @@ class Hub extends ChangeNotifier {
     _turnUntil = now.add(Duration(seconds: seconds + 1));
     _blindStart = now.add(const Duration(seconds: 1));
     _blindUntil = _blindStart!.add(Duration(seconds: seconds));
-    Timer(const Duration(seconds: 1), () => _step(sim: false));
+    _blindTimer = Timer(const Duration(seconds: 1), () {
+      _blindTimer = null;
+      if (_active(generation)) _step(sim: false);
+    });
     _note('注入：打${sideZh(side)}方向燈，${sideZh(side)}後方$object');
     _step(sim: false);
   }
@@ -304,8 +389,11 @@ class Hub extends ChangeNotifier {
   /// 駕駛提問。只在停車時接受（道安規則 §90：行駛中不得操作行車輔助顯示設備）
   Future<void> ask(String question) async {
     final q = question.trim();
-    if (q.isEmpty) return;
+    if (q.isEmpty || !running) return;
+    final generation = _generation;
+    final eventGeneration = _eventGeneration;
     final online = await hasInternet();
+    if (!_active(generation) || eventGeneration != _eventGeneration) return;
     final (answer, hit) = lookup(q);
     _queryState = {'question': q, 'online': online, 'speed': speed};
     _queryDecision = Decision(
@@ -385,6 +473,8 @@ class Hub extends ChangeNotifier {
 
   /// sim=false：只重新廣播（措辭完成、情境切換時），不推進模擬時間
   void _step({bool sim = true}) {
+    if (!running) return;
+    final generation = _generation;
     if (sim) _simulate();
     final now = DateTime.now();
     String domain;
@@ -393,7 +483,9 @@ class Hub extends ChangeNotifier {
     _Utterance? u;
 
     // 優先序：安全 > 回答 > 座艙空氣
-    if (_blindUntil != null && !now.isBefore(_blindStart!) && now.isBefore(_blindUntil!)) {
+    if (_blindUntil != null &&
+        !now.isBefore(_blindStart!) &&
+        now.isBefore(_blindUntil!)) {
       domain = 'blind_spot';
       state = {
         'side': _blindSide,
@@ -418,8 +510,10 @@ class Hub extends ChangeNotifier {
         recirc = '外';
         _inform = informAuto(d, state);
         _informUntil = now.add(const Duration(seconds: 8));
-        _note('系統自動切外循環（${d.reason}）'
-            '${_inform!.cost.isEmpty ? '，無感 → 不告知' : '，${_inform!.cost} → 告知'}');
+        _note(
+          '系統自動切外循環（${d.reason}）'
+          '${_inform!.cost.isEmpty ? '，無感 → 不告知' : '，${_inform!.cost} → 告知'}',
+        );
       }
       if (_informUntil != null && now.isBefore(_informUntil!)) d = _inform!;
     }
@@ -441,6 +535,7 @@ class Hub extends ChangeNotifier {
       u.spoken = true;
       onSpeak?.call(u.text!, d.urgency == Urgency.safety);
     }
+    if (!_active(generation)) return;
 
     final env = Envelope(
       eventId: 'evt_${(++_seq).toString().padLeft(6, '0')}',
@@ -481,7 +576,12 @@ class Hub extends ChangeNotifier {
   }
 
   /// 決定這句話誰來講。安全級與模型未就緒走模板，其他交給 SLM，輸出過 guard 才用。
-  void _startPhrase(_Utterance u, String domain, Map<String, dynamic> s, Decision d) {
+  void _startPhrase(
+    _Utterance u,
+    String domain,
+    Map<String, dynamic> s,
+    Decision d,
+  ) {
     if (d.urgency == Urgency.silent) {
       u.text = null;
       u.src = 'rule';
@@ -502,29 +602,35 @@ class Hub extends ChangeNotifier {
       return;
     }
     final prompt = renderPrompt(s, d);
+    final generation = _generation;
     final sw = Stopwatch()..start();
-    Slm.I.phrase(prompt).then((raw) {
-      sw.stop();
-      final g = check(raw, prompt, d);
-      u.ms = sw.elapsedMilliseconds;
-      u.rawModel = raw.trim();
-      if (g.ok) {
-        u.text = g.text;
-        u.src = 'slm';
-        _note('SLM ${u.ms} ms →「${g.text}」');
-      } else {
-        u.text = tpl;
-        u.src = 'template';
-        u.rejected = g.why;
-        _note('SLM 輸出「${u.rawModel}」被擋（${g.why}）→ 模板「$tpl」');
-      }
-      if (_utt == u) _step(sim: false);
-    }).catchError((e) {
-      u.text = tpl;
-      u.src = 'template';
-      _note('SLM 失敗（$e）→ 模板');
-      if (_utt == u) _step(sim: false);
-    });
+    Slm.I
+        .phrase(prompt)
+        .then((raw) {
+          if (!_active(generation) || !identical(_utt, u)) return;
+          sw.stop();
+          final g = check(raw, prompt, d);
+          u.ms = sw.elapsedMilliseconds;
+          u.rawModel = raw.trim();
+          if (g.ok) {
+            u.text = g.text;
+            u.src = 'slm';
+            _note('SLM ${u.ms} ms →「${g.text}」');
+          } else {
+            u.text = tpl;
+            u.src = 'template';
+            u.rejected = g.why;
+            _note('SLM 輸出「${u.rawModel}」被擋（${g.why}）→ 模板「$tpl」');
+          }
+          if (_utt == u) _step(sim: false);
+        })
+        .catchError((e) {
+          if (!_active(generation) || !identical(_utt, u)) return;
+          u.text = tpl;
+          u.src = 'template';
+          _note('SLM 失敗（$e）→ 模板');
+          if (_utt == u) _step(sim: false);
+        });
   }
 
   String? get lastRejected => _utt?.rejected;
@@ -557,8 +663,9 @@ Future<List<String>> localIps() async {
 
 Future<bool> hasInternet() async {
   try {
-    final r = await InternetAddress.lookup('huggingface.co')
-        .timeout(const Duration(milliseconds: 1200));
+    final r = await InternetAddress.lookup(
+      'huggingface.co',
+    ).timeout(const Duration(milliseconds: 1200));
     return r.isNotEmpty;
   } catch (_) {
     return false;

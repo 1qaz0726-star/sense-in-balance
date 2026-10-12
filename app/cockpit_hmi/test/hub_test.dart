@@ -26,7 +26,9 @@ void main() {
         if (hit.isNotEmpty) return hit.first;
         await Future.delayed(const Duration(milliseconds: 100));
       }
-      throw TimeoutException('等不到事件；最後一則：${got.isEmpty ? '無' : jsonEncode(got.last.toJson())}');
+      throw TimeoutException(
+        '等不到事件；最後一則：${got.isEmpty ? '無' : jsonEncode(got.last.toJson())}',
+      );
     }
 
     // 心跳：一秒一則、event_id 遞增
@@ -51,10 +53,17 @@ void main() {
 
     // 告知 8 秒後回到 silent，CO₂ 下降
     final r = await waitFor(
-        (e) => e.domain == 'cabin_air' && e.decision.urgency == Urgency.silent && e.ts > b.ts + 8,
-        secs: 12);
+      (e) =>
+          e.domain == 'cabin_air' &&
+          e.decision.urgency == Urgency.silent &&
+          e.ts > b.ts + 8,
+      secs: 12,
+    );
     expect(r.state['recirc'], '外');
-    expect(r.state['co2'] as int, lessThan(b.state['co2'] as int)); // 切外循環後 CO₂ 降下來
+    expect(
+      r.state['co2'] as int,
+      lessThan(b.state['co2'] as int),
+    ); // 切外循環後 CO₂ 降下來
 
     // C 盲點 → 安全級、規則直出，4 秒後自動結束
     Hub.I.injectBlindSpot(seconds: 2);
@@ -75,8 +84,9 @@ void main() {
     expect(d1.phraseSrc, 'kb');
     expect(d1.phrase, isNot(contains('查不到')));
     await Hub.I.ask('冷氣濾網多久換一次？');
-    final d2 = await waitFor((e) =>
-        e.domain == 'query' && e.state['question'] == '冷氣濾網多久換一次？');
+    final d2 = await waitFor(
+      (e) => e.domain == 'query' && e.state['question'] == '冷氣濾網多久換一次？',
+    );
     expect(d2.phrase, '這個我查不到，請參考車主手冊');
 
     // 語音：每句只念一次；只有安全級會打斷；silent 不念
@@ -96,8 +106,13 @@ void main() {
   // 儀表（/）收不到狀態訊息；Hub 能提供網頁檔案。用的是網頁版同一個 RemoteSource。
   test('網頁中控：事件、狀態、指令、網頁檔案', () async {
     var voiceCmd = <String, dynamic>{};
-    Hub.I.webAsset = (p) async => p == 'index.html' ? utf8.encode('<html>ok</html>') : null;
-    Hub.I.statusExtra = () => {'model': '測試模型', 'voice': '測試語音', 'voice_on': true};
+    Hub.I.webAsset = (p) async =>
+        p == 'index.html' ? utf8.encode('<html>ok</html>') : null;
+    Hub.I.statusExtra = () => {
+      'model': '測試模型',
+      'voice': '測試語音',
+      'voice_on': true,
+    };
     Hub.I.onCommand = (m) => voiceCmd = m;
     await Hub.I.start();
 
@@ -128,7 +143,10 @@ void main() {
     src.setScene(Scene.co2Rising);
     await until(() => Hub.I.scene == Scene.co2Rising);
     src.injectBlindSpot(side: 'left', object: '自行車', seconds: 2);
-    await until(() => got.any((e) => e.domain == 'blind_spot' && e.state['side'] == 'left'));
+    await until(
+      () =>
+          got.any((e) => e.domain == 'blind_spot' && e.state['side'] == 'left'),
+    );
     src.setScene(Scene.parked);
     await until(() => got.any((e) => e.speed == 0));
     src.ask('為什麼要換氣？');
@@ -144,11 +162,15 @@ void main() {
 
     // 網頁檔案
     final c = HttpClient();
-    final r1 = await (await c.getUrl(Uri.parse('http://127.0.0.1:$kWsPort/'))).close();
+    final r1 = await (await c.getUrl(
+      Uri.parse('http://127.0.0.1:$kWsPort/'),
+    )).close();
     expect(r1.statusCode, 200);
     expect(r1.headers.contentType?.mimeType, 'text/html');
     expect(await utf8.decodeStream(r1), '<html>ok</html>');
-    final r2 = await (await c.getUrl(Uri.parse('http://127.0.0.1:$kWsPort/nope.js'))).close();
+    final r2 = await (await c.getUrl(
+      Uri.parse('http://127.0.0.1:$kWsPort/nope.js'),
+    )).close();
     expect(r2.statusCode, 404);
     await r2.drain();
     c.close();
@@ -162,4 +184,95 @@ void main() {
     Hub.I.onCommand = null;
     await Hub.I.stop();
   }, timeout: const Timeout(Duration(seconds: 60)));
+
+  test('嵌入模式不占用原埠號，仍有心跳，停止後不再發事件', () async {
+    // Occupy the original port before startup: an embedded Hub must not try
+    // to bind or alter the existing service (for example the classmate APK).
+    final occupied = await HttpServer.bind(InternetAddress.anyIPv4, kWsPort);
+    final got = <Envelope>[];
+    final sub = Hub.I.events.listen(got.add);
+    addTearDown(() async {
+      await Hub.I.stop();
+      await sub.cancel();
+      await occupied.close(force: true);
+    });
+    Hub.I.onSpeak = null;
+    Hub.I.setScene(Scene.normal);
+    await Hub.I.start(network: false);
+    await Future<void>.delayed(const Duration(milliseconds: 1100));
+    expect(Hub.I.running, isTrue);
+    expect(Hub.I.serverError, isNull);
+    expect(Hub.I.myIps, isEmpty);
+    expect(got.length, greaterThanOrEqualTo(2));
+    expect(got.last.domain, 'cabin_air');
+    expect(got.last.vehicle?['speed'], isA<int>());
+
+    Hub.I.injectBlindSpot();
+    await Hub.I.stop();
+    // Deliver events queued before stop, then check both the heartbeat and
+    // delayed blind-spot callback cannot emit anything after disposal.
+    await Future<void>.delayed(Duration.zero);
+    final stoppedCount = got.length;
+    await Future<void>.delayed(const Duration(milliseconds: 1100));
+    expect(Hub.I.running, isFalse);
+    expect(got.length, stoppedCount);
+  });
+
+  test('清除未出現與已出現的左右警示，不會被延遲計時器復活', () async {
+    final got = <Envelope>[];
+    final sub = Hub.I.events.listen(got.add);
+    addTearDown(() async {
+      await Hub.I.stop();
+      await sub.cancel();
+    });
+    Hub.I.onSpeak = null;
+    Hub.I.setScene(Scene.normal);
+    await Hub.I.start(network: false);
+
+    Hub.I.injectBlindSpot(side: 'right', seconds: 10);
+    expect(Hub.I.last?.vehicle?['turn'], 'right');
+    Hub.I.clearDemoEvents();
+    expect(Hub.I.last?.domain, 'cabin_air');
+    expect(Hub.I.last?.vehicle?['turn'], isNull);
+    await Future<void>.delayed(Duration.zero);
+    got.clear();
+    await Future<void>.delayed(const Duration(milliseconds: 1100));
+    expect(got.any((e) => e.domain == 'blind_spot'), isFalse);
+
+    Hub.I.injectBlindSpot(side: 'left', object: '自行車', seconds: 10);
+    await Future<void>.delayed(const Duration(milliseconds: 1100));
+    expect(Hub.I.last?.domain, 'blind_spot');
+    expect(Hub.I.last?.state['side'], 'left');
+    expect(Hub.I.last?.phrase, '左後方有自行車');
+    expect(Hub.I.last?.phraseSrc, 'rule');
+    Hub.I.setScene(Scene.parked);
+    Hub.I.clearDemoEvents();
+    expect(Hub.I.last?.domain, 'cabin_air');
+    expect(Hub.I.last?.vehicle?['turn'], isNull);
+    await Future<void>.delayed(Duration.zero);
+    got.clear();
+    await Future<void>.delayed(const Duration(milliseconds: 1100));
+    expect(got.any((e) => e.domain == 'blind_spot'), isFalse);
+    expect(Hub.I.last?.vehicle?['turn'], isNull);
+  });
+
+  test('啟動尚未完成就停止，不會留下伺服器或復活舊警示', () async {
+    addTearDown(Hub.I.stop);
+    Hub.I.onSpeak = null;
+    Hub.I.setScene(Scene.normal);
+    final starting = Hub.I.start();
+    Hub.I.injectBlindSpot(side: 'left', object: '自行車', seconds: 10);
+    await Hub.I.stop();
+    await starting;
+    expect(Hub.I.running, isFalse);
+
+    final available = await HttpServer.bind(InternetAddress.anyIPv4, kWsPort);
+    await available.close(force: true);
+    await Hub.I.start(network: false);
+    expect(Hub.I.last?.domain, 'cabin_air');
+    expect(Hub.I.last?.vehicle?['turn'], isNull);
+    await Future<void>.delayed(const Duration(milliseconds: 1100));
+    expect(Hub.I.last?.domain, 'cabin_air');
+    expect(Hub.I.last?.vehicle?['turn'], isNull);
+  });
 }

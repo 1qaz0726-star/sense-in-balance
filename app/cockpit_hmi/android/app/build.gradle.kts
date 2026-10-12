@@ -1,3 +1,5 @@
+import java.util.Base64
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
@@ -21,7 +23,15 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.auohack.cockpit_hmi"
+        // The PC demonstration coexists with the team's differently signed APK.
+        val desktopDemo = (project.findProperty("dart-defines") as? String)
+            .orEmpty().split(',').any {
+                runCatching {
+                    String(Base64.getDecoder().decode(it), Charsets.UTF_8)
+                }.getOrNull() == "REPAIR_DESKTOP_DEMO=true"
+            }
+        applicationId = if (desktopDemo) "com.auohack.cockpit_hmi.desktopdemo" else "com.auohack.cockpit_hmi"
+        manifestPlaceholders["appLabel"] = if (desktopDemo) "不用重講 PC 實測" else "座艙 HMI"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = 24

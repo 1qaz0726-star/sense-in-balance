@@ -1,0 +1,444 @@
+// 「不用重講」核心：模型只提出修正，確認及執行由固定規則管理。
+// 車控 adapter 目前只有 MockCabinActuator，所有結果均明示模擬。
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
+
+enum CabinSetting { rearFan, mediaVolume, navVolume }
+
+enum RequestedChange { decrease, increase, keep, remove }
+
+enum RepairPhase {
+  idle,
+  parsing,
+  awaitingClarification,
+  awaitingConfirmation,
+  executing,
+  completed,
+  cancelled,
+  failed,
+  indeterminate,
+}
+
+class IntentPatch {
+  IntentPatch({
+    required Map<CabinSetting, RequestedChange> changes,
+    this.clarification,
+  }) : changes = Map.unmodifiable(changes);
+
+  final Map<CabinSetting, RequestedChange> changes;
+  final String? clarification;
+
+  /// 只接受完整 JSON；不抽取 code fence，不補括號，不猜未知欄位。
+  factory IntentPatch.fromModelOutput(String raw) {
+    if (raw.length > 16384) {
+      throw const FormatException('模型輸出過長');
+    }
+    final decoded = jsonDecode(raw);
+    _rejectDuplicateObjectKeys(raw);
+    if (decoded is! Map<String, dynamic> ||
+        decoded.length != 2 ||
+        !decoded.containsKey('changes') ||
+        !decoded.containsKey('clarification')) {
+      throw const FormatException('僅接受 changes 與 clarification 兩個欄位');
+    }
+    final rawChanges = decoded['changes'];
+    final clarification = decoded['clarification'];
+    if (rawChanges is! Map<String, dynamic>) {
+      throw const FormatException('changes 必須是 JSON object');
+    }
+    if (clarification != null &&
+        (clarification is! String ||
+            clarification.trim().isEmpty ||
+            clarification.length > 256)) {
+      throw const FormatException('clarification 必須是 null 或非空短字串');
+    }
+    final changes = <CabinSetting, RequestedChange>{};
+    for (final entry in rawChanges.entries) {
+      final settings = CabinSetting.values.where((e) => e.name == entry.key);
+      final values = RequestedChange.values.where((e) => e.name == entry.value);
+      if (settings.isEmpty || values.isEmpty) {
+        throw const FormatException('不支援的設定或修正動作');
+      }
+      changes[settings.first] = values.first;
+    }
+    if (changes.isEmpty && clarification == null) {
+      throw const FormatException('沒有修正項目或待澄清事項');
+    }
+    return IntentPatch(
+      changes: changes,
+      clarification: clarification as String?,
+    );
+  }
+}
+
+// jsonDecode 對重複 key 採最後一項，會隱藏較早的非法值；明確拒絕歧義。
+// 這裡只掃已通過 jsonDecode 的合法 JSON token，不另行修復或解讀 JSON。
+void _rejectDuplicateObjectKeys(String raw) {
+  final containers = <Set<String>?>[];
+  var index = 0;
+  while (index < raw.length) {
+    final character = raw[index];
+    if (character == '{') {
+      containers.add(<String>{});
+    } else if (character == '[') {
+      containers.add(null);
+    } else if (character == '}' || character == ']') {
+      containers.removeLast();
+    } else if (character == '"') {
+      final start = index++;
+      while (raw[index] != '"') {
+        if (raw[index] == r'\') index++;
+        index++;
+      }
+      var next = index + 1;
+      while (next < raw.length && raw[next].trim().isEmpty) {
+        next++;
+      }
+      if (next < raw.length && raw[next] == ':') {
+        final key = jsonDecode(raw.substring(start, index + 1)) as String;
+        if (!containers.last!.add(key)) {
+          throw const FormatException('JSON 不得有重複欄位');
+        }
+      }
+    }
+    index++;
+  }
+}
+
+class ExecutionReceipt {
+  ExecutionReceipt({
+    required this.success,
+    required this.message,
+    this.simulated = false,
+    Map<CabinSetting, int> state = const {},
+  }) : state = Map.unmodifiable(state);
+
+  final bool success;
+  final String message;
+  final bool simulated;
+  final Map<CabinSetting, int> state;
+
+  Map<String, dynamic> toJson() => {
+    'success': success,
+    'message': message,
+    'simulated': simulated,
+    'state': {for (final e in state.entries) e.key.name: e.value},
+  };
+}
+
+class RepairSnapshot {
+  RepairSnapshot({
+    this.taskId,
+    this.revision = 0,
+    this.phase = RepairPhase.idle,
+    Map<CabinSetting, RequestedChange> pending = const {},
+    this.clarification,
+    String? unresolvedText,
+    this.result,
+    this.error,
+  }) : pending = Map.unmodifiable(pending),
+       unresolvedText = unresolvedText == null
+           ? null
+           : String.fromCharCodes(unresolvedText.runes.take(500));
+
+  final String? taskId;
+  final int revision;
+  final RepairPhase phase;
+  final Map<CabinSetting, RequestedChange> pending;
+  final String? clarification;
+
+  /// 只保留引發目前澄清的原句，不累積完整對話歷史。
+  final String? unresolvedText;
+  final ExecutionReceipt? result;
+  final String? error;
+
+  Map<String, dynamic> toJson() => {
+    'task_id': taskId,
+    'revision': revision,
+    'phase': phase.name,
+    'pending': {for (final e in pending.entries) e.key.name: e.value.name},
+    'clarification': clarification,
+    'unresolved_text': unresolvedText,
+    'result': result?.toJson(),
+    'error': error,
+  };
+}
+
+typedef IntentParser =
+    Future<IntentPatch> Function(String text, RepairSnapshot snapshot);
+typedef CabinActuator =
+    Future<ExecutionReceipt> Function(
+      Map<CabinSetting, RequestedChange> changes,
+      String commandId,
+    );
+
+class RepairController extends ChangeNotifier {
+  RepairController({
+    required IntentParser parser,
+    required CabinActuator actuator,
+    this.parseTimeout = const Duration(seconds: 15),
+    this.executionTimeout = const Duration(seconds: 8),
+  }) : _parser = parser,
+       _actuator = actuator;
+
+  final IntentParser _parser;
+  final CabinActuator _actuator;
+  final Duration parseTimeout;
+  final Duration executionTimeout;
+  RepairSnapshot _snapshot = RepairSnapshot();
+  RepairSnapshot get snapshot => _snapshot;
+  int _taskNumber = 0;
+  int _requestNumber = 0;
+  bool _disposed = false;
+
+  bool get _executionLocked =>
+      _snapshot.phase == RepairPhase.executing ||
+      _snapshot.phase == RepairPhase.indeterminate;
+
+  void _publish(RepairSnapshot value) {
+    if (_disposed) return;
+    _snapshot = value;
+    notifyListeners();
+  }
+
+  /// 執行中或回報未知時不接受新任務，以免重複修改實體狀態。
+  Future<bool> newTask(String text) async {
+    if (_disposed || _executionLocked || text.trim().isEmpty) return false;
+    final taskId =
+        'repair_${DateTime.now().microsecondsSinceEpoch}_${++_taskNumber}';
+    final base = RepairSnapshot(taskId: taskId, revision: 1);
+    return _parse(text.trim(), base);
+  }
+
+  Future<bool> revise(String text) async {
+    if (_disposed ||
+        _executionLocked ||
+        text.trim().isEmpty ||
+        _snapshot.taskId == null ||
+        _snapshot.phase == RepairPhase.completed ||
+        _snapshot.phase == RepairPhase.cancelled) {
+      return false;
+    }
+    final base = RepairSnapshot(
+      taskId: _snapshot.taskId,
+      revision: _snapshot.revision + 1,
+      pending: _snapshot.pending,
+      clarification: _snapshot.clarification,
+      unresolvedText: _snapshot.unresolvedText,
+    );
+    return _parse(text.trim(), base);
+  }
+
+  Future<bool> _parse(String text, RepairSnapshot base) async {
+    final request = ++_requestNumber;
+    _publish(
+      RepairSnapshot(
+        taskId: base.taskId,
+        revision: base.revision,
+        phase: RepairPhase.parsing,
+        pending: base.pending,
+        clarification: base.clarification,
+        unresolvedText: base.unresolvedText,
+      ),
+    );
+    bool current() => !_disposed && request == _requestNumber;
+    try {
+      final patch = await _parser(text, base).timeout(parseTimeout);
+      if (!current()) return false;
+      // 在既有任務上套差異；未提到的欄位原封不動。
+      final pending = Map<CabinSetting, RequestedChange>.of(base.pending);
+      for (final entry in patch.changes.entries) {
+        if (entry.value == RequestedChange.remove) {
+          pending.remove(entry.key);
+        } else {
+          pending[entry.key] = entry.value;
+        }
+      }
+      // 既有需求被全部移除是完成取消，不應逼使用者再提出一項需求。
+      // 首次對不存在項目說 remove 仍缺少上下文，需澄清。
+      final cancelledAll =
+          base.pending.isNotEmpty &&
+          pending.isEmpty &&
+          patch.clarification == null;
+      final clarification =
+          patch.clarification ??
+          (pending.isEmpty && !cancelledAll ? '目前沒有待執行項目，請說明想調整什麼。' : null);
+      _publish(
+        RepairSnapshot(
+          taskId: base.taskId,
+          revision: base.revision,
+          phase: cancelledAll
+              ? RepairPhase.cancelled
+              : (clarification == null
+                    ? RepairPhase.awaitingConfirmation
+                    : RepairPhase.awaitingClarification),
+          pending: pending,
+          clarification: clarification,
+          unresolvedText: clarification == null
+              ? null
+              : (base.unresolvedText ?? text),
+        ),
+      );
+      return true;
+    } catch (e) {
+      if (!current()) return false;
+      _publish(
+        RepairSnapshot(
+          taskId: base.taskId,
+          revision: base.revision,
+          phase: RepairPhase.failed,
+          pending: base.pending,
+          clarification: base.clarification,
+          unresolvedText: base.unresolvedText,
+          error: e is TimeoutException
+              ? '理解逾時，尚未執行；可以局部重說或取消。'
+              : '無法可靠理解，尚未執行；可以局部重說或取消。',
+        ),
+      );
+      return false;
+    }
+  }
+
+  bool cancel() {
+    if (_disposed ||
+        _executionLocked ||
+        _snapshot.taskId == null ||
+        _snapshot.phase == RepairPhase.completed ||
+        _snapshot.phase == RepairPhase.cancelled) {
+      return false;
+    }
+    ++_requestNumber; // 使已排隊或正在推論的結果失效。
+    _publish(
+      RepairSnapshot(
+        taskId: _snapshot.taskId,
+        revision: _snapshot.revision + 1,
+        phase: RepairPhase.cancelled,
+      ),
+    );
+    return true;
+  }
+
+  Future<bool> confirm(String taskId, int revision) async {
+    final before = _snapshot;
+    if (_disposed ||
+        before.taskId != taskId ||
+        before.revision != revision ||
+        before.phase != RepairPhase.awaitingConfirmation ||
+        before.clarification != null ||
+        before.pending.isEmpty) {
+      return false;
+    }
+    // 在呼叫 adapter 前切換階段；連點或重送同一確認都不會再次執行。
+    _publish(
+      RepairSnapshot(
+        taskId: taskId,
+        revision: revision,
+        phase: RepairPhase.executing,
+        pending: before.pending,
+      ),
+    );
+    final commandId = '$taskId:$revision';
+    bool active() =>
+        !_disposed &&
+        _snapshot.taskId == taskId &&
+        _snapshot.revision == revision &&
+        (_snapshot.phase == RepairPhase.executing ||
+            _snapshot.phase == RepairPhase.indeterminate);
+    void acknowledge(ExecutionReceipt receipt) {
+      if (!active()) return;
+      _publish(
+        RepairSnapshot(
+          taskId: taskId,
+          revision: revision,
+          phase: receipt.success ? RepairPhase.completed : RepairPhase.failed,
+          pending: before.pending,
+          result: receipt,
+          error: receipt.success ? null : receipt.message,
+        ),
+      );
+    }
+
+    Future<ExecutionReceipt>? execution;
+    try {
+      execution = _actuator(before.pending, commandId);
+      final receipt = await execution.timeout(executionTimeout);
+      acknowledge(receipt);
+      return receipt.success;
+    } catch (_) {
+      if (!active()) return false;
+      _publish(
+        RepairSnapshot(
+          taskId: taskId,
+          revision: revision,
+          phase: RepairPhase.indeterminate,
+          pending: before.pending,
+          error: '執行回報尚未確認；不會宣稱完成或自動重送。',
+        ),
+      );
+      // timeout 不代表 adapter 撤回了動作；晚到的 ACK 仍可澄清真實結果。
+      if (execution != null) {
+        unawaited(execution.then(acknowledge, onError: (Object _) {}));
+      }
+      return false;
+    }
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    ++_requestNumber;
+    super.dispose();
+  }
+}
+
+/// 僅修改記憶體，不接 CAN、真冷氣或車用音響。
+class MockCabinActuator {
+  MockCabinActuator({int rearFan = 3, int mediaVolume = 5, int navVolume = 5})
+    : _state = {
+        CabinSetting.rearFan: rearFan,
+        CabinSetting.mediaVolume: mediaVolume,
+        CabinSetting.navVolume: navVolume,
+      };
+
+  final Map<CabinSetting, int> _state;
+  final Map<String, ExecutionReceipt> _receipts = {};
+  int executeCount = 0;
+  Map<CabinSetting, int> get state => Map.unmodifiable(_state);
+
+  Future<ExecutionReceipt> call(
+    Map<CabinSetting, RequestedChange> changes,
+    String commandId,
+  ) async {
+    final cached = _receipts[commandId];
+    if (cached != null) return cached;
+    if (changes.values.contains(RequestedChange.remove)) {
+      return ExecutionReceipt(
+        success: false,
+        simulated: true,
+        message: '模擬控制：remove 應在待執行任務中處理，未執行。',
+        state: _state,
+      );
+    }
+    executeCount++;
+    for (final entry in changes.entries) {
+      final delta = switch (entry.value) {
+        RequestedChange.decrease => -1,
+        RequestedChange.increase => 1,
+        RequestedChange.keep => 0,
+        RequestedChange.remove => 0,
+      };
+      final limit = entry.key == CabinSetting.rearFan ? 7 : 10;
+      _state[entry.key] = (_state[entry.key]! + delta).clamp(0, limit).toInt();
+    }
+    final receipt = ExecutionReceipt(
+      success: true,
+      simulated: true,
+      message: '模擬控制已完成；未連接真實車輛。',
+      state: _state,
+    );
+    _receipts[commandId] = receipt;
+    return receipt;
+  }
+}

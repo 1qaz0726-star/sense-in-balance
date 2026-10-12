@@ -144,7 +144,8 @@ class Slm extends ChangeNotifier {
     final part = File('${f.path}.part');
     var got = await part.exists() ? await part.length() : 0;
     _set(SlmPhase.downloading, '連線中…');
-    final client = HttpClient()..connectionTimeout = const Duration(seconds: 20);
+    final client = HttpClient()
+      ..connectionTimeout = const Duration(seconds: 20);
     IOSink? sink;
     try {
       final req = await client.getUrl(Uri.parse(kModelUrl));
@@ -171,8 +172,10 @@ class Slm extends ChangeNotifier {
           last = now;
           lastBytes = got;
           progress = got / kModelBytes;
-          _set(SlmPhase.downloading,
-              '${_gb(got)} / ${_gb(kModelBytes)}　${mbps.toStringAsFixed(1)} MB/s');
+          _set(
+            SlmPhase.downloading,
+            '${_gb(got)} / ${_gb(kModelBytes)}　${mbps.toStringAsFixed(1)} MB/s',
+          );
         }
       }
       await sink.flush();
@@ -204,13 +207,14 @@ class Slm extends ChangeNotifier {
   Future<void> importFile() async {
     IOSink? sink;
     try {
-      final res = await FilePicker.platform
-          .pickFiles(withReadStream: true, allowMultiple: false);
+      final res = await FilePicker.platform.pickFiles(
+        withReadStream: true,
+        allowMultiple: false,
+      );
       if (res == null || res.files.isEmpty) return;
       final src = res.files.first;
       if (src.size != kModelBytes) {
-        _set(SlmPhase.missing,
-            '這個檔案大小是 ${src.size}，不是我們用的模型（應為 $kModelBytes）');
+        _set(SlmPhase.missing, '這個檔案大小是 ${src.size}，不是我們用的模型（應為 $kModelBytes）');
         return;
       }
       final f = await _file();
@@ -256,7 +260,9 @@ class Slm extends ChangeNotifier {
       for (final b in [PreferredBackend.gpu, PreferredBackend.cpu]) {
         try {
           _model = await FlutterGemma.getActiveModel(
-              maxTokens: 2048, preferredBackend: b);
+            maxTokens: 2048,
+            preferredBackend: b,
+          );
           backend = b.name.toUpperCase();
           break;
         } catch (e) {
@@ -265,8 +271,10 @@ class Slm extends ChangeNotifier {
       }
       if (_model == null) throw Exception(detail);
       loadTime = sw.elapsed;
-      _set(SlmPhase.ready,
-          '$backend　載入 ${(sw.elapsed.inMilliseconds / 1000).toStringAsFixed(1)} s');
+      _set(
+        SlmPhase.ready,
+        '$backend　載入 ${(sw.elapsed.inMilliseconds / 1000).toStringAsFixed(1)} s',
+      );
       _warmUp();
     } catch (e) {
       _set(SlmPhase.error, '載入失敗：$e');
@@ -276,35 +284,60 @@ class Slm extends ChangeNotifier {
   /// 暖機：載入後先空跑一句。實機第一次措辭要 6–7 秒（GPU 初次編譯），
   /// 先在背景吃掉這段，錄影時的第一句才不會特別慢。真正的措辭會排在它後面。
   void _warmUp() {
-    const s = {'co2': 420, 'trend': '→', 't_in': 26, 't_out': 34, 'recirc': '內', 'occ': 2, 'speed': 50};
+    const s = {
+      'co2': 420,
+      'trend': '→',
+      't_in': 26,
+      't_out': 34,
+      'recirc': '內',
+      'occ': 2,
+      'speed': 50,
+    };
     final sw = Stopwatch()..start();
     phrase(renderPrompt(s, decideCabin(s))).then((_) {
-      detail = '$backend　載入 ${(loadTime!.inMilliseconds / 1000).toStringAsFixed(1)} s・'
+      detail =
+          '$backend　載入 ${(loadTime!.inMilliseconds / 1000).toStringAsFixed(1)} s・'
           '暖機 ${(sw.elapsedMilliseconds / 1000).toStringAsFixed(1)} s';
       notifyListeners();
     }, onError: (_) {});
   }
 
   /// 措辭一句。呼叫會排隊，一次只跑一個 session（slm_probe 的參數：topK 1、temp 0.2、seed 42）
-  Future<String> phrase(String prompt) {
+  Future<String> phrase(String prompt) => generate(kSystemPrompt, prompt);
+
+  /// Separate prompts share the same model/queue. Parsing must not use the
+  /// original phrasing prompt, which assumes the decision is already made.
+  Future<String> generate(
+    String systemPrompt,
+    String prompt, {
+    Duration timeout = const Duration(seconds: 20),
+  }) {
     final c = Completer<String>();
-    _queue = _queue.then((_) async {
+    _queue = _queue.catchError((Object _) {}).then((_) async {
       final m = _model;
       if (m == null) return c.completeError(StateError('模型未就緒'));
       InferenceModelSession? s;
       try {
+        final sw = Stopwatch()..start();
         s = await m.createSession(temperature: 0.2, randomSeed: 42, topK: 1);
         await s.addQueryChunk(
-            Message.text(text: '$kSystemPrompt\n\n$prompt', isUser: true));
+          Message.text(text: '$systemPrompt\n\n$prompt', isUser: true),
+        );
         final buf = StringBuffer();
-        await for (final piece in s.getResponseAsync()) {
+        await for (final piece in s.getResponseAsync().timeout(timeout)) {
+          if (sw.elapsed > timeout) throw TimeoutException('模型解析逾時');
           buf.write(piece);
+          if (buf.length > 4096) throw const FormatException('模型輸出過長');
         }
         c.complete(buf.toString());
       } catch (e) {
         c.completeError(e);
       } finally {
-        await s?.close();
+        try {
+          await s?.close();
+        } catch (e) {
+          debugPrint('SLM session close failed: $e');
+        }
       }
     });
     return c.future;

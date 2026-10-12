@@ -2,7 +2,7 @@
     <!-- 線上圖磚、模型首次下載用。圖磚看過一次會快取，之後離線可顯示 -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <application
-        android:label="座艙 HMI"
+        android:label="${appLabel}"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

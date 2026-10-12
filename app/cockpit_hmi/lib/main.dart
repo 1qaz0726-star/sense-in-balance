@@ -21,6 +21,7 @@ import 'center.dart';
 import 'common.dart';
 import 'dash.dart';
 import 'local_source.dart';
+import 'repair_screen.dart';
 import 'setup.dart';
 import 'slm.dart';
 
@@ -87,6 +88,8 @@ class ModePicker extends StatelessWidget {
                           )),
                   _btn(context, s, btnW, '儀表＋AI Box', '手機・配 iPad 網頁中控',
                       () => const BoxDashScreen()),
+                  _btn(context, s, btnW, '不用重講', '停車文字原型・車控模擬',
+                      () => const RepairScreen()),
                 ],
               ),
               SizedBox(height: s.gap * 2),

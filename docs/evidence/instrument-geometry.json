@@ -1,0 +1,80 @@
+[
+  {
+    "warning": "右後機車",
+    "same_resolution": true,
+    "regions": {
+      "own_vehicle_core": {
+        "pixel_rect": [
+          1730,
+          440,
+          1910,
+          1100
+        ],
+        "identical_pixels": true,
+        "difference_bbox": null
+      },
+      "gauge_120_tick": {
+        "pixel_rect": [
+          990,
+          1050,
+          1100,
+          1125
+        ],
+        "identical_pixels": true,
+        "difference_bbox": null
+      }
+    }
+  },
+  {
+    "warning": "左後自行車",
+    "same_resolution": true,
+    "regions": {
+      "own_vehicle_core": {
+        "pixel_rect": [
+          1730,
+          440,
+          1910,
+          1100
+        ],
+        "identical_pixels": true,
+        "difference_bbox": null
+      },
+      "gauge_120_tick": {
+        "pixel_rect": [
+          990,
+          1050,
+          1100,
+          1125
+        ],
+        "identical_pixels": true,
+        "difference_bbox": null
+      }
+    }
+  },
+  {
+    "warning": "右後汽車",
+    "same_resolution": true,
+    "regions": {
+      "own_vehicle_core": {
+        "pixel_rect": [
+          1730,
+          440,
+          1910,
+          1100
+        ],
+        "identical_pixels": true,
+        "difference_bbox": null
+      },
+      "gauge_120_tick": {
+        "pixel_rect": [
+          990,
+          1050,
+          1100,
+          1125
+        ],
+        "identical_pixels": true,
+        "difference_bbox": null
+      }
+    }
+  }
+]

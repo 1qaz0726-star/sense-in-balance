@@ -41,14 +41,16 @@ class ModelSetupPage extends StatelessWidget {
             padding: EdgeInsets.all(s.pad),
             children: [
               Text('中控會在平板上離線跑一個小語言模型（Qwen2.5-1.5B，約 1.6 GB），'
-                  '只負責把規則引擎的決策講成一句話。\n'
+                  '原模式用來措辭；「不用重講」原型用來解析需求與局部修正。\n'
+                  '確認、取消與執行結果仍由固定規則處理。\n'
                   '模型不包在 APK 裡，第一次要下載一次，之後完全離線。',
                   style: TextStyle(fontSize: s.cardBody, color: C.textHigh, height: 1.5)),
               SizedBox(height: s.gap),
               Text('・建議用 Wi-Fi，平板要留 2 GB 以上空間\n'
                   '・下載中斷了沒關係，再按一次會接著下載\n'
                   '・如果裝過 slm_probe 測試 App，可以先把它解除安裝，釋放 1.6 GB\n'
-                  '・沒有模型也能用：措辭會改用固定模板，畫面會標示「模板」',
+                  '・原座艙模式沒有模型時，以固定模板措辭\n'
+                  '・「不用重講」需要模型就緒，未就緒時不能解析需求',
                   style: TextStyle(fontSize: s.label, color: C.textLow, height: 1.6)),
               SizedBox(height: s.gap * 1.5),
               Text(modelStatusText(m),
@@ -81,7 +83,7 @@ class ModelSetupPage extends StatelessWidget {
                   OutlinedButton(onPressed: m.load, child: const Text('重試載入')),
                 TextButton(
                   onPressed: () => Navigator.of(context).pop(),
-                  child: Text(m.ready ? '完成' : '先用模板模式'),
+                  child: Text(m.ready ? '完成' : '返回'),
                 ),
               ]),
             ],

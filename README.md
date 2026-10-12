@@ -1,80 +1,55 @@
-# 該說才說：會自己動手的安靜座艙 AI
+# 感知有度｜智慧座艙雙屏原型
 
-**感知有度 Sense in Balance**｜2026 AI 座艙感知與視覺化 Hackathon（實作組）
+保留原作的「該說才說」規則警示，加入可局部修正的座艙需求協作，以及重新設計的行車儀表。用一台操作平板、一台只讀第二屏，加上本地 **Qwen2.5-1.5B-Instruct** 展示；目前車速、盲點與車控均為模擬。
 
-車上的提示越來越多，很多事系統自己就能處理，卻還是丟給駕駛。這個專案讓座艙 AI **先動手、少開口**：能自動處理的事直接做（例如車內 CO2 升高時自動切外循環），只有在有代價或有危險時，才用一句話告知。
+本倉庫是 [Kinoko1412/sense-in-balance](https://github.com/Kinoko1412/sense-in-balance) 的公開 fork，從 `5ea2253` 延伸，保留原始 Git 歷史。原作團隊：**葉士愷・黃昱羲・胡馨**。原始提案、研究及 App 仍在倉庫；[原 README](docs/ORIGINAL_README.md) 另存，方便對照。
 
-## 架構
+## 畫面與功能
 
-```
-座艙狀態（CO2、溫度、內外循環、乘員、車速、盲點事件）
-        │
-        ▼
-  規則引擎 rules.dart ── 決定「做什麼、多緊急、有沒有代價」
-        │
-        ├─ 安全警示 ──────────────► 直接發出，不等模型
-        ├─ 可自動處理 ────────────► 執行層直接執行，有代價才告知
-        └─ 需要告知 ──► 端側 SLM（Qwen2.5-1.5B，離線）措辭
-                              │
-                              ▼
-                        檢查器 guard.dart ── 字數、簡體字、編造數字、誇大用語
-                              │              不通過 → 改用固定模板
-                              ▼
-        數位儀表（緊急、最小資訊）＋ 中控（告知卡片、問答、地圖）＋ 語音播報
-```
+![新版行車儀表](docs/images/instrument-normal.png)
 
-- **模型只負責措辭，不做決策**：1.5B 模型在開放式問答會產生幻覺，所以決策交給規則引擎，問答交給本地知識庫（`kb.dart`）。查不到就回答「這個我查不到，請參考車主手冊」。
-- **多數時候不說話**：在 12,000 組窮舉狀態中，約 70% 的正解是保持安靜。
-- **斷網照常運作**：決策、措辭、問答、語音都在裝置上離線執行。決賽前會加上雲端增強（Hybrid AI）。
-- **雙屏同步**：手機當 AI Box，用 WebSocket（:8765）同步儀表與中控，1 秒心跳，3 秒逾時就顯示失效。iPad 用 Safari 開網頁版中控即可。
-
-## 目錄
-
-| 路徑 | 內容 |
+| 行車警示 | 座艙需求協作 |
 |---|---|
-| `app/cockpit_hmi/` | 座艙 HMI App（Flutter／Android）：規則引擎、SLM 措辭與檢查器、知識庫、WebSocket Hub、儀表、中控、網頁版中控 |
-| `app/slm_probe/` | 端側模型實測用的小 App（手機與平板的 CPU／GPU 延遲與輸出品質） |
-| `research/INTERFACE.md` | 跨裝置事件介面規格 |
-| `research/prototype/` | Python 研究原型：狀態產生器與決策（`states.py`，App 規則引擎與它逐筆一致）、台灣用語檢核、模型基線評測 |
-| `research/validation/` | 架構驗證腳本 |
-| `media/remotion/` | 報名影片的 Remotion 動畫（片頭、團隊、問題、架構圖、片尾） |
-| `media/video_edit/` | 影片剪輯管線：FFmpeg 分段、自動馬賽克、字幕、用 Whisper 逐段驗證音軌 |
-| `media/slides/` | 提案簡報與報名表單產生器（python-pptx、python-docx） |
+| ![右後方機車警示](docs/images/blindspot-motorcycle.png) | ![主控待確認需求](docs/images/controls-pending.png) |
+| 警示區固定占位，不會擠壓或縮放儀表；左右汽車、機車、自行車以不同輪廓顯示。 | 一次提出多項需求，再只修改或取消其中一項；確認後才模擬執行，第二屏同步結果。 |
 
-## 建置 App
+- **安全警示直接發出**：盲點與原規則不等模型；兩屏共用事件的側別、文字與物件。
+- **不用整段重講**：Qwen 解析後排風量、媒體音量、導航音量三項需求，保留尚未修改的項目。提供澄清流程，執行有確認與版本檢查；含糊指令的理解仍有失敗，見驗證文件。
+- **雙屏各司其職**：平板在「行車儀表／座艙主控」切換；第二屏在「行車儀表／協作結果」切換，沒有車控操作權限。
+- **原作仍可獨立開啟**：地圖、知識庫問答、語音、原情境劇本和角色選擇保留於原入口，尚未全部遷入新版。
 
-需要 Flutter 3.35.2，以及 Android 14 以上（Target SDK 34）。
+## 先在電腦操作
 
-```bash
-cd app/cockpit_hmi
-flutter test                      # 16 項自動化測試
-# 網頁版中控要先打包進 APK
-flutter build web -t lib/main_web.dart --release --no-web-resources-cdn --pwa-strategy=none
-python tool/pack_web.py
-flutter build apk --release
+準備 **Flutter 3.35.2、JDK 17、Android SDK**；Windows 雙裝置展示另需 Android Emulator、兩個 API 34 x86_64 AVD，以及本機 Qwen GGUF／llama.cpp Vulkan runtime。Android 建置使用 SDK 36，與模擬器的 API 34 不同。
+
+在英文路徑 clone，依 [Windows 雙裝置指南](docs/WINDOWS_DESKTOP.md) 準備模型和 AVD，再於倉庫根目錄執行：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\desktop\build-demo.ps1
+.\tools\desktop\start-demo.cmd
 ```
 
-不打包網頁版也能建置和執行，只是 iPad 連進來時沒有中控畫面。打包後 `pubspec.yaml` 會多出一段 `web-assets` 資產清單，那段不要 commit。
+APK、模型、runtime 和 log 存於被 Git 忽略的 `.local/`；本倉庫只提供原始碼、截圖與工具，不包含預建 APK 或模型。設定外部檔案路徑、首次建置與同步連線，見上述指南。
 
-Windows 使用者名稱如果有中文，`flutter test` 可能出現「Could not prepare isolate」錯誤，先把暫存資料夾改到英文路徑再跑：`set TEMP=C:\tmp`（PowerShell：`$env:TEMP='C:\tmp'`）。
+## 開發入口
 
-第一次開啟 App 時，會從 Hugging Face（`litert-community/Qwen2.5-1.5B-Instruct`）下載模型檔，也可以手動匯入 `.litertlm`。APK 裡不含模型，也不含任何 API Key。
+| Dart 入口 | 用途 |
+|---|---|
+| `lib/main.dart` | 原作完整 App、角色選擇 |
+| `lib/main_repair.dart` | 新版操作平板：儀表＋局部修正＋確認 |
+| `lib/main_repair_monitor.dart` | 新版原生只讀第二屏 |
+| `lib/main_repair_web.dart` | 選用瀏覽器第二屏 |
 
-已建置好的 APK 放在 [Releases](../../releases)。
+檔案位於 `app/cockpit_hmi/`。建置參數、實體兩平板連線、測試方式見 [DEVELOPMENT.md](docs/DEVELOPMENT.md)；實測證據與限制見 [VALIDATION.md](docs/VALIDATION.md)。
 
-## 使用方式
+## 驗證與邊界
 
-- **一機模式**：平板開「中控」，內建 AI Box。
-- **兩機模式**：手機開「儀表＋AI Box」，iPad 用 Safari 開 `http://<手機 IP>:8765` 當中控。
+已在此電腦用真正的 PC Qwen 1.5B 和兩個原生 Android 模擬器操作：左右盲點、第二屏同步、多項需求、局部取消與確認。最新繪製與幾何測試包含 45 組狀態；完整測試結果記錄於驗證文件。
 
-## 備註
+這不是實車 ADAS 或自動駕駛系統：沒有 CAN、攝影機偵測或語音辨識；實際車控是替身。PC GGUF 驗證不代表 Samsung S9 端上 LiteRT 的速度或相容性。原研究的 12,000 組規則基準與約 70% 保持安靜是上游研究結果，不是新版模型準確率。
 
-- 盲點與 CO2 事件是模擬注入的，還沒有接上真實感測器或攝影機。
-- 主動告知的措辭在手機上實測需要 4.6–6.8 秒；安全警示不經過模型，不受這個延遲影響。
-- `media/` 和 `research/` 裡的腳本寫死了開發機的路徑，使用前請先改路徑。需要 API 的腳本從環境變數讀金鑰（`DEEPSEEK_API_KEY`、`GROQ_API_KEY`）。
-- 拍攝素材、團隊照片、字型檔沒有放進 repo。Remotion 需要的 `public/NotoSansTC-VF.ttf` 請自行從 Google Fonts 下載（SIL OFL 1.1）。
-- 使用的第三方元件與授權：Qwen2.5-1.5B-Instruct（Apache 2.0）、Flutter（BSD-3）、flutter_gemma（MIT）、flutter_tts（MIT）、flutter_map（BSD-3）、OpenStreetMap 圖資（ODbL，© OpenStreetMap contributors）、Remotion（Remotion License）。
+## 原作與授權
 
-## 團隊
+保留 `research/`、`app/slm_probe/`、`media/` 和既有第三方授權資料。新 UI 包含 Noto Sans TC 字型及 [SIL OFL 授權](app/cockpit_hmi/assets/fonts/OFL.txt)。Qwen、Flutter、各套件及圖資遵循各自授權；模型來源請用指南中的官方連結。
 
-葉士愷・黃昱羲・胡馨
+原倉庫沒有頂層專案 `LICENSE`，本 fork 沒有擅自新增整體授權。對外授權及商用範圍需由團隊共同確認。
