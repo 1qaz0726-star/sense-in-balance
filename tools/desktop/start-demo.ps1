@@ -1,5 +1,11 @@
 ﻿# 雙裝置桌面實測：一台 Android 平板、一台 Android 手機，以及電腦上的真實 Qwen。
 # 不變更永久環境變數、全機／使用者執行原則、AVD 設定或 App 資料；不卸載、不 wipe、不移動視窗。
+# 平板為乘客詳細端，手機為駕駛摘要端；啟動後仍須六位碼配對、駕駛授權、局部修正與最終確認。
+# 預設需求文字提交仍真跑 Qwen；手動安排誤解會標示來源，逐項按鈕修正不呼叫模型。
+# 此助手不是 S9 端上或麥克風測試；Android ASR 的嚴格本地路徑尚未實測。
+# 倉庫設定 compile SDK 36、target SDK 34、min SDK 24；最終兩個 APK 已重建、aapt 核對、安裝並走完原生流程。
+# 最新 target 34 原生流程使用兩次真 Qwen 文字輸入、駕駛確認與模擬 ACK；先前 target 36 人工故障／按鈕流程另保留。
+# 模擬器流程完成不代替 S9、麥克風、兩實體斷外網或人體效益驗證。
 # 例：.\tools\desktop\start-demo.ps1 -SkipInstall
 # 只有需要重置 App 當前狀態時，才加上 -RestartApp。
 [CmdletBinding()]
@@ -411,8 +417,8 @@ try {
     foreach ($definition in $devices) { Wait-DemoBoot $definition }
 
     $installTargets = @(
-        [pscustomobject]@{ Serial = $taskTabletSerial; Apk = $ApkPath; Label = '平板操作端' },
-        [pscustomobject]@{ Serial = $taskPhoneSerial; Apk = $PhoneApkPath; Label = '手機第二屏' }
+        [pscustomobject]@{ Serial = $taskTabletSerial; Apk = $ApkPath; Label = '平板乘客詳細端' },
+        [pscustomobject]@{ Serial = $taskPhoneSerial; Apk = $PhoneApkPath; Label = '手機駕駛摘要端' }
     )
     foreach ($target in $installTargets) {
         if ($SkipInstall) {
@@ -440,8 +446,9 @@ try {
     $phoneLaunch = Invoke-DemoAdb -Arguments @('-s', $taskPhoneSerial, 'shell', 'am', 'start', '-W', '-n', $taskComponent) -TimeoutSeconds 30
     if (($phoneLaunch.Output + [Environment]::NewLine + $phoneLaunch.ErrorOutput) -match '(?m)^Error(?: type|:)') { throw "手機第二屏 App 啟動失敗：$($phoneLaunch.Output) $($phoneLaunch.ErrorOutput)" }
     Write-Host ''
-    Write-Host '完成：平板操作 App，手機原生第二屏顯示同步結果。' -ForegroundColor Green
-    Write-Host '模型在這台電腦真實推論；此模式供桌面互動驗證，並非 S9 端上效能測試。'
+    Write-Host '啟動完成：平板為乘客詳細端，手機為駕駛摘要端；請在 App 內配對、授權、修正並由駕駛確認。' -ForegroundColor Green
+    Write-Host '預設需求提交仍由電腦本地 Qwen 真實推論；手動安排誤解有標示，按鈕修正不呼叫模型。'
+    Write-Host '收到逐項模擬 ACK 才完成任務；此模式不是 S9 端上、麥克風或人體效益測試。'
     Write-Host "重跑可加 -SkipInstall 保留正在操作的 App；必要時再加 -RestartApp。記錄：$taskLogRoot"
 } catch {
     Write-Host ''

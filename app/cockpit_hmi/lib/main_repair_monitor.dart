@@ -1,4 +1,4 @@
-// Native phone companion for the PC demonstration. No model and no controls.
+// Native driver companion: no model; paired driver grants and confirms tasks.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 

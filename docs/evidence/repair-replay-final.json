@@ -1,0 +1,508 @@
+{
+  "type": "technical_replay_not_user_study",
+  "participants": 0,
+  "audio_asr_tested": false,
+  "hardware": "PC GGUF Q8 / localhost clients",
+  "B_C_equivalence": "Same model and state machine; C adds a second observing client. No human screen benefit measured.",
+  "rows": [
+    {
+      "condition": "A",
+      "fault_id": "synthetic-nav-decrease-before-execution",
+      "initial_values": {
+        "rearFan": 3,
+        "mediaVolume": 5,
+        "navVolume": 5
+      },
+      "before_fault": {
+        "task_id": "repair_1791790409235398_1",
+        "revision": 1,
+        "phase": "awaitingConfirmation",
+        "pending": {
+          "rearFan": "decrease",
+          "mediaVolume": "decrease",
+          "navVolume": "keep"
+        },
+        "clarification": null,
+        "unresolved_text": null,
+        "result": null,
+        "error": null
+      },
+      "fault_source": {
+        "paired": true,
+        "driver_online": true,
+        "passenger_authorized": false,
+        "authorization_task_id": null,
+        "authorization_expires_at": null,
+        "demo_fault": {
+          "label": "展示安排的誤解，尚未執行",
+          "setting": "navVolume",
+          "before": "keep",
+          "injected": "decrease",
+          "source": "manual_demo_injection",
+          "task_id": "repair_1791790409235398_1"
+        }
+      },
+      "injected_proposal": {
+        "task_id": "repair_1791790409235398_1",
+        "revision": 2,
+        "phase": "awaitingConfirmation",
+        "pending": {
+          "rearFan": "decrease",
+          "mediaVolume": "decrease",
+          "navVolume": "decrease"
+        },
+        "clarification": null,
+        "unresolved_text": null,
+        "result": null,
+        "error": null
+      },
+      "repair_input": "後座風量維持原值，音樂小一點，導航提示不要變。",
+      "script_input_characters": 23,
+      "repair_machine_ms": 164,
+      "through_ack_machine_ms": 170,
+      "human_time_measured": false,
+      "revised_proposal": {
+        "task_id": "repair_1791790409483550_2",
+        "revision": 1,
+        "phase": "awaitingConfirmation",
+        "pending": {
+          "rearFan": "keep",
+          "mediaVolume": "decrease",
+          "navVolume": "keep"
+        },
+        "clarification": null,
+        "unresolved_text": null,
+        "result": null,
+        "error": null
+      },
+      "receipt": {
+        "success": true,
+        "message": "模擬控制已完成；未連接真實車輛。",
+        "simulated": true,
+        "state": {
+          "rearFan": 3,
+          "mediaVolume": 4,
+          "navVolume": 5
+        },
+        "items": {
+          "rearFan": {
+            "before": 3,
+            "after": 3,
+            "action": "keep",
+            "success": true
+          },
+          "mediaVolume": {
+            "before": 5,
+            "after": 4,
+            "action": "decrease",
+            "success": true
+          },
+          "navVolume": {
+            "before": 5,
+            "after": 5,
+            "action": "keep",
+            "success": true
+          }
+        }
+      },
+      "actuator_executions": 1,
+      "client_count": 1,
+      "client_completed_frames": 1,
+      "observer_completed_frames": 0,
+      "model_traces": [
+        {
+          "input": {
+            "pending": {},
+            "unresolved_text": null,
+            "clarification": null,
+            "user_text": "後座風小一點，音樂也小一點，導航提示不要變。"
+          },
+          "raw": "{\"changes\":{\"rearFan\":\"decrease\",\"mediaVolume\":\"decrease\",\"navVolume\":\"keep\"},\"clarification\":null}",
+          "path": "qwen",
+          "elapsed_ms": 236,
+          "error": null
+        },
+        {
+          "input": {
+            "pending": {},
+            "unresolved_text": null,
+            "clarification": null,
+            "user_text": "後座風量維持原值，音樂小一點，導航提示不要變。"
+          },
+          "raw": "{\"changes\":{\"rearFan\":\"keep\",\"mediaVolume\":\"decrease\",\"navVolume\":\"keep\"},\"clarification\":null}",
+          "path": "qwen",
+          "elapsed_ms": 162,
+          "error": null
+        }
+      ]
+    },
+    {
+      "condition": "B",
+      "fault_id": "synthetic-nav-decrease-before-execution",
+      "initial_values": {
+        "rearFan": 3,
+        "mediaVolume": 5,
+        "navVolume": 5
+      },
+      "before_fault": {
+        "task_id": "repair_1791790409686467_1",
+        "revision": 1,
+        "phase": "awaitingConfirmation",
+        "pending": {
+          "rearFan": "decrease",
+          "mediaVolume": "decrease",
+          "navVolume": "keep"
+        },
+        "clarification": null,
+        "unresolved_text": null,
+        "result": null,
+        "error": null
+      },
+      "fault_source": {
+        "paired": true,
+        "driver_online": true,
+        "passenger_authorized": false,
+        "authorization_task_id": null,
+        "authorization_expires_at": null,
+        "demo_fault": {
+          "label": "展示安排的誤解，尚未執行",
+          "setting": "navVolume",
+          "before": "keep",
+          "injected": "decrease",
+          "source": "manual_demo_injection",
+          "task_id": "repair_1791790409686467_1"
+        }
+      },
+      "injected_proposal": {
+        "task_id": "repair_1791790409686467_1",
+        "revision": 2,
+        "phase": "awaitingConfirmation",
+        "pending": {
+          "rearFan": "decrease",
+          "mediaVolume": "decrease",
+          "navVolume": "decrease"
+        },
+        "clarification": null,
+        "unresolved_text": null,
+        "result": null,
+        "error": null
+      },
+      "repair_input": "導航不要改，風量也先不用改，其餘照剛剛。",
+      "script_input_characters": 20,
+      "repair_machine_ms": 126,
+      "through_ack_machine_ms": 134,
+      "human_time_measured": false,
+      "revised_proposal": {
+        "task_id": "repair_1791790409686467_1",
+        "revision": 3,
+        "phase": "awaitingConfirmation",
+        "pending": {
+          "mediaVolume": "decrease",
+          "navVolume": "keep"
+        },
+        "clarification": null,
+        "unresolved_text": null,
+        "result": null,
+        "error": null
+      },
+      "receipt": {
+        "success": true,
+        "message": "模擬控制已完成；未連接真實車輛。",
+        "simulated": true,
+        "state": {
+          "rearFan": 3,
+          "mediaVolume": 4,
+          "navVolume": 5
+        },
+        "items": {
+          "mediaVolume": {
+            "before": 5,
+            "after": 4,
+            "action": "decrease",
+            "success": true
+          },
+          "navVolume": {
+            "before": 5,
+            "after": 5,
+            "action": "keep",
+            "success": true
+          }
+        }
+      },
+      "actuator_executions": 1,
+      "client_count": 1,
+      "client_completed_frames": 2,
+      "observer_completed_frames": 0,
+      "model_traces": [
+        {
+          "input": {
+            "pending": {},
+            "unresolved_text": null,
+            "clarification": null,
+            "user_text": "後座風小一點，音樂也小一點，導航提示不要變。"
+          },
+          "raw": "{\"changes\":{\"rearFan\":\"decrease\",\"mediaVolume\":\"decrease\",\"navVolume\":\"keep\"},\"clarification\":null}",
+          "path": "qwen",
+          "elapsed_ms": 167,
+          "error": null
+        },
+        {
+          "input": {
+            "pending": {
+              "rearFan": "decrease",
+              "mediaVolume": "decrease",
+              "navVolume": "decrease"
+            },
+            "unresolved_text": null,
+            "clarification": null,
+            "user_text": "導航不要改，風量也先不用改，其餘照剛剛。"
+          },
+          "raw": "{\"changes\":{\"navVolume\":\"keep\",\"rearFan\":\"keep\"},\"clarification\":null}",
+          "path": "qwen",
+          "elapsed_ms": 125,
+          "error": null
+        }
+      ]
+    },
+    {
+      "condition": "C",
+      "fault_id": "synthetic-nav-decrease-before-execution",
+      "initial_values": {
+        "rearFan": 3,
+        "mediaVolume": 5,
+        "navVolume": 5
+      },
+      "before_fault": {
+        "task_id": "repair_1791790410017384_1",
+        "revision": 1,
+        "phase": "awaitingConfirmation",
+        "pending": {
+          "rearFan": "decrease",
+          "mediaVolume": "decrease",
+          "navVolume": "keep"
+        },
+        "clarification": null,
+        "unresolved_text": null,
+        "result": null,
+        "error": null
+      },
+      "fault_source": {
+        "paired": true,
+        "driver_online": true,
+        "passenger_authorized": false,
+        "authorization_task_id": null,
+        "authorization_expires_at": null,
+        "demo_fault": {
+          "label": "展示安排的誤解，尚未執行",
+          "setting": "navVolume",
+          "before": "keep",
+          "injected": "decrease",
+          "source": "manual_demo_injection",
+          "task_id": "repair_1791790410017384_1"
+        }
+      },
+      "injected_proposal": {
+        "task_id": "repair_1791790410017384_1",
+        "revision": 2,
+        "phase": "awaitingConfirmation",
+        "pending": {
+          "rearFan": "decrease",
+          "mediaVolume": "decrease",
+          "navVolume": "decrease"
+        },
+        "clarification": null,
+        "unresolved_text": null,
+        "result": null,
+        "error": null
+      },
+      "repair_input": "導航不要改，風量也先不用改，其餘照剛剛。",
+      "script_input_characters": 20,
+      "repair_machine_ms": 127,
+      "through_ack_machine_ms": 134,
+      "human_time_measured": false,
+      "revised_proposal": {
+        "task_id": "repair_1791790410017384_1",
+        "revision": 3,
+        "phase": "awaitingConfirmation",
+        "pending": {
+          "mediaVolume": "decrease",
+          "navVolume": "keep"
+        },
+        "clarification": null,
+        "unresolved_text": null,
+        "result": null,
+        "error": null
+      },
+      "receipt": {
+        "success": true,
+        "message": "模擬控制已完成；未連接真實車輛。",
+        "simulated": true,
+        "state": {
+          "rearFan": 3,
+          "mediaVolume": 4,
+          "navVolume": 5
+        },
+        "items": {
+          "mediaVolume": {
+            "before": 5,
+            "after": 4,
+            "action": "decrease",
+            "success": true
+          },
+          "navVolume": {
+            "before": 5,
+            "after": 5,
+            "action": "keep",
+            "success": true
+          }
+        }
+      },
+      "actuator_executions": 1,
+      "client_count": 2,
+      "client_completed_frames": 2,
+      "observer_completed_frames": 2,
+      "model_traces": [
+        {
+          "input": {
+            "pending": {},
+            "unresolved_text": null,
+            "clarification": null,
+            "user_text": "後座風小一點，音樂也小一點，導航提示不要變。"
+          },
+          "raw": "{\"changes\":{\"rearFan\":\"decrease\",\"mediaVolume\":\"decrease\",\"navVolume\":\"keep\"},\"clarification\":null}",
+          "path": "qwen",
+          "elapsed_ms": 162,
+          "error": null
+        },
+        {
+          "input": {
+            "pending": {
+              "rearFan": "decrease",
+              "mediaVolume": "decrease",
+              "navVolume": "decrease"
+            },
+            "unresolved_text": null,
+            "clarification": null,
+            "user_text": "導航不要改，風量也先不用改，其餘照剛剛。"
+          },
+          "raw": "{\"changes\":{\"navVolume\":\"keep\",\"rearFan\":\"keep\"},\"clarification\":null}",
+          "path": "qwen",
+          "elapsed_ms": 126,
+          "error": null
+        }
+      ]
+    },
+    {
+      "condition": "D",
+      "fault_id": "synthetic-nav-decrease-before-execution",
+      "initial_values": {
+        "rearFan": 3,
+        "mediaVolume": 5,
+        "navVolume": 5
+      },
+      "before_fault": {
+        "task_id": "repair_1791790410347964_1",
+        "revision": 1,
+        "phase": "awaitingConfirmation",
+        "pending": {
+          "rearFan": "decrease",
+          "mediaVolume": "decrease",
+          "navVolume": "keep"
+        },
+        "clarification": null,
+        "unresolved_text": null,
+        "result": null,
+        "error": null
+      },
+      "fault_source": {
+        "paired": true,
+        "driver_online": true,
+        "passenger_authorized": false,
+        "authorization_task_id": null,
+        "authorization_expires_at": null,
+        "demo_fault": {
+          "label": "展示安排的誤解，尚未執行",
+          "setting": "navVolume",
+          "before": "keep",
+          "injected": "decrease",
+          "source": "manual_demo_injection",
+          "task_id": "repair_1791790410347964_1"
+        }
+      },
+      "injected_proposal": {
+        "task_id": "repair_1791790410347964_1",
+        "revision": 2,
+        "phase": "awaitingConfirmation",
+        "pending": {
+          "rearFan": "decrease",
+          "mediaVolume": "decrease",
+          "navVolume": "decrease"
+        },
+        "clarification": null,
+        "unresolved_text": null,
+        "result": null,
+        "error": null
+      },
+      "repair_input": "按鈕：導航維持原值，取消風量變更",
+      "script_input_characters": 16,
+      "repair_machine_ms": 0,
+      "through_ack_machine_ms": 13,
+      "human_time_measured": false,
+      "revised_proposal": {
+        "task_id": "repair_1791790410347964_1",
+        "revision": 4,
+        "phase": "awaitingConfirmation",
+        "pending": {
+          "mediaVolume": "decrease",
+          "navVolume": "keep"
+        },
+        "clarification": null,
+        "unresolved_text": null,
+        "result": null,
+        "error": null
+      },
+      "receipt": {
+        "success": true,
+        "message": "模擬控制已完成；未連接真實車輛。",
+        "simulated": true,
+        "state": {
+          "rearFan": 3,
+          "mediaVolume": 4,
+          "navVolume": 5
+        },
+        "items": {
+          "mediaVolume": {
+            "before": 5,
+            "after": 4,
+            "action": "decrease",
+            "success": true
+          },
+          "navVolume": {
+            "before": 5,
+            "after": 5,
+            "action": "keep",
+            "success": true
+          }
+        }
+      },
+      "actuator_executions": 1,
+      "client_count": 2,
+      "client_completed_frames": 2,
+      "observer_completed_frames": 2,
+      "model_traces": [
+        {
+          "input": {
+            "pending": {},
+            "unresolved_text": null,
+            "clarification": null,
+            "user_text": "後座風小一點，音樂也小一點，導航提示不要變。"
+          },
+          "raw": "{\"changes\":{\"rearFan\":\"decrease\",\"mediaVolume\":\"decrease\",\"navVolume\":\"keep\"},\"clarification\":null}",
+          "path": "qwen",
+          "elapsed_ms": 158,
+          "error": null
+        }
+      ]
+    }
+  ]
+}

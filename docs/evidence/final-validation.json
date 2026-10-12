@@ -1,0 +1,92 @@
+{
+  "recorded_at_utc": "2026-10-12T08:18:43.3557358Z",
+  "kind": "Engineering and native emulator validation, not a user study",
+  "participants": 0,
+  "full_flutter_tests": {
+    "many_dependencies_mocked": true,
+    "passed": 88,
+    "duration_seconds": 40,
+    "count": 88,
+    "result": "All tests passed"
+  },
+  "static_analysis": {
+    "duration_seconds": 3.5,
+    "result": "No issues found"
+  },
+  "release_web": {
+    "entry": "main_repair_web.dart",
+    "local_canvaskit": true,
+    "build_success": true,
+    "cloud_model": false
+  },
+  "android_apks": {
+    "architecture": "android-x64",
+    "target_sdk": 34,
+    "entry_points": [
+      "main_repair.dart",
+      "main_repair_monitor.dart"
+    ],
+    "compile_sdk": 36,
+    "debug": true,
+    "min_sdk": 24,
+    "app_id": "com.auohack.cockpit_hmi.desktopdemo",
+    "metadata_verified_by": "aapt 35.0.0"
+  },
+  "latest_native_flow": {
+    "steps": [
+      "propose three settings",
+      "pair driver",
+      "grant this task",
+      "cancel only fan by true Qwen plus guard",
+      "confirm latest revision",
+      "receive mock item receipt"
+    ],
+    "target_sdk": 34,
+    "actuator": "Memory mock, no vehicle control",
+    "traces": "native/repair-final-qwen-traces.txt",
+    "backend": "PC local GGUF Q8",
+    "devices": [
+      "Android API34 x64 tablet AVD",
+      "Android API34 x64 phone AVD"
+    ],
+    "model": "Qwen2.5-1.5B-Instruct",
+    "input": "Built-in preset text, still real inference",
+    "values": {
+      "navVolume": 5,
+      "mediaVolume": 4,
+      "rearFan": 3
+    },
+    "status_evidence": "native/repair-final-status.json",
+    "fault_injection": false,
+    "result": "Completed"
+  },
+  "earlier_native_flow": {
+    "explicit_manual_nav_fault": true,
+    "lease_expiry_observed": true,
+    "mixed_qwen_text_and_buttons": true,
+    "target_sdk": 36,
+    "final_values": "3/4/5",
+    "screens": "native/repair-passenger-revised.png and repair-driver-complete.png"
+  },
+  "limitations": [
+    "0 participants; no frequency or usability effect measured",
+    "No S9 on-device performance",
+    "No actual microphone ASR or spoken feedback verification",
+    "No external-network-disabled two physical tablet test",
+    "No real vehicle or autonomous driving control",
+    "Fixed20 and seen16 regression are not population accuracy"
+  ],
+  "source_sha256": {
+    "app/cockpit_hmi/lib/repair_parser.dart": "4ca474c10412a52cfe789045ed2e97ceb34828d83866425026e364491b9dd886",
+    "app/cockpit_hmi/lib/repair_collaboration.dart": "7bb2fb3b8b5a961b58c326834f0e8aef84019aaf6da41286546a482be8b835d4",
+    "app/cockpit_hmi/lib/repair_hub.dart": "daab5a0075632bcca1c84354f78a21720ff4e6eb0feeb65f16ee34f960b21d83",
+    "app/cockpit_hmi/lib/repair_task.dart": "c12e445974e10ccaa911e6b93aa7cde419022c288b4e43521c681bd27b9ea9ca",
+    "app/cockpit_hmi/lib/repair_screen.dart": "32504eb16f51665d1c509b314b817c62873f4c9b3a25e19855a1fd87cbf52fd2",
+    "app/cockpit_hmi/lib/main_repair_web.dart": "f3e13e31359538dbcc950413787e6a00eb69e3f405e4991efdf599b40bc4d119",
+    "app/cockpit_hmi/android/app/build.gradle.kts": "95e9e7df63cb3c24c98de948b9ab879a6dce04ace4c898775608bb104e5242c0"
+  },
+  "apk_sha256": {
+    "tablet": "0f65b1dae3b61306410e96eb5b676b92ff15cb1873df48d43d133cff935cd14b",
+    "phone": "a79cc7a79d9917dd7cc468f21c42f5f8f0e03cfc6e935e04aea255bdfca56c7a"
+  }
+}

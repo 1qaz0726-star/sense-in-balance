@@ -35,7 +35,8 @@ android {
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = 24
-        targetSdk = flutter.targetSdkVersion
+        // Official competition rules V11 require HMI apps to target API 34.
+        targetSdk = 34
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }

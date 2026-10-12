@@ -1,12 +1,12 @@
 # Windows 電腦雙裝置展示
 
-這份指南用一台 Windows 電腦執行真正的 Qwen 1.5B，再用兩個原生 Android 模擬器操作與顯示。平板是操作主機；手機是只讀第二屏。車速、油量、盲點和車控都是展示模擬，沒有接真車或攝影機。
+這份指南用一台Windows電腦執行真正的Qwen1.5B，再用兩個原生Android模擬器展示「不用重講」。平板是乘客詳細端／狀態主機，手機是駕駛端：未配對時觀察，六位碼配對後可授權乘客修正、收權、確認最新版本與查看逐項ACK。車速、油量、盲點和車控都是展示模擬，沒有接真車或攝影機。
 
 原作完整入口仍是 `app/cockpit_hmi/lib/main.dart`。本指南建置新版 `main_repair.dart` 與 `main_repair_monitor.dart`，保留原規則警示，新增局部修正需求與雙屏結果。S9 端上 LiteRT 模式是另一種配置，見 [DEVELOPMENT.md](DEVELOPMENT.md)；本指南的 x64 APK 不供 S9 安裝，也不能代表 S9 的推論速度。
 
 ## 1. 準備工具與模擬器
 
-將倉庫 clone 到英文路徑，例如 `C:\dev\sense-in-balance`。安裝 Flutter **3.35.2**（包含 Dart 3.9）、JDK **17**、Git，以及 Android Studio／Android SDK。Android 建置套件依 [DEVELOPMENT.md](DEVELOPMENT.md) 的清單準備；SDK 36 是建置套件，下面的 Android 14 是模擬器映像，兩者用途不同。
+將倉庫 clone 到英文路徑，例如 `C:\dev\sense-in-balance`。安裝 Flutter **3.35.2**（包含 Dart 3.9）、JDK **17**、Git，以及 Android Studio／Android SDK。Android建置套件依[DEVELOPMENT.md](DEVELOPMENT.md)的清單準備；目前compile SDK36、target SDK34、min SDK24。兩個最新APK已建出並經aapt確認target 34；下面的Android 14／API34則是模擬器映像，不能以它代替APK的target核對。
 
 先自行檢查 `flutter --version`、`flutter doctor -v` 與 Android SDK 授權。`build-demo.ps1` 可從 PATH 找 Flutter，或以 `-FlutterPath` 選擇 Flutter；不依賴 Codex 安裝或特定 Windows 使用者名稱。`-SdkRoot`／`-JavaHome` 只設定本次程序的 `ANDROID_HOME`／`JAVA_HOME`／PATH，屬於環境提示，不會覆蓋 Flutter 已保存的設定或 Android Studio 內建 JDK。
 
@@ -14,8 +14,8 @@
 
 | AVD 名稱，大小寫須一致 | 裝置角色 | 系統映像 |
 |---|---|---|
-| `center_tab` | Tablet 裝置，平板主控／儀表 | Android 14／API 34、Google APIs、**x86_64** |
-| `dash_phone` | Phone 裝置，駕駛只讀第二屏 | Android 14／API 34、Google APIs、**x86_64** |
+| `center_tab` | Tablet裝置，乘客詳細端／狀態主機／儀表 | Android 14／API 34、Google APIs、**x86_64** |
+| `dash_phone` | Phone裝置，未配對觀察，配對後駕駛授權／確認／ACK | Android 14／API 34、Google APIs、**x86_64** |
 
 這套助手適用 Windows x64 的 Android Emulator。需啟用 BIOS／UEFI 虛擬化及 Windows Hypervisor Platform（WHPX）。助手會以每台 2 GB RAM 啟動，固定使用 `emulator-5554` 和 `emulator-5556`；其他模擬器占用這兩個位置時會停止並說明原因，不會取代或清除它們。
 
@@ -91,17 +91,38 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\desktop\build-de
 
 首次使用會啟動／驗證 PC 模型、開啟或沿用兩個指定 AVD、安裝兩個 APK，建立同步橋接，再開 App。已裝正確版本時用 `-SkipInstall`；只有需要重置當前 App 記憶體狀態時才加 `-RestartApp`。Android SDK 不在預設 `%LOCALAPPDATA%\Android\Sdk` 時，加 `-SdkRoot`。
 
-平板預設是行車儀表，可用展示情境觸發左右盲點；切換座艙主控後，先提出需求、只修改其中一項，再確認模擬套用。手機預設顯示儀表，可切協作結果，但不能操作車控。參考驗證與已知模型限制見 [VALIDATION.md](VALIDATION.md)。
+平板可顯示儀表與乘客明細，手機可顯示儀表與駕駛摘要。更新角色功能後先重新建置／安裝兩份APK；`-SkipInstall`只適用已安裝正確新版本，助手不以此自動更新程式。
+
+操作順序：
+
+1. 平板輸入／帶入「後座風小一點，音樂也小一點，導航提示不要變。」並提交。帶入按鈕只填文字，預設示範仍由PC真Qwen解析；不會因是示範台詞而改成固定答案。
+2. 在平板打開「連接駕駛屏」，查看六位配對碼；手機切到協作摘要輸入此碼。連線成功但未配對仍是觀察者。
+3. 手機駕駛端核對摘要，按「授權乘客協助120秒」。
+4. 平板帶入「只取消風量」並提交「風量先不用改，其餘照剛剛。」；真Qwen提出取消風量待辦，其餘音樂降低／導航keep保留。逐項按鈕與規則澄清另有分流紀錄，不冒充模型輸出。
+5. 駕駛看最新版本並「確認套用（車控模擬）」。接受確認與收到ACK是不同階段；回執到達後才顯示模擬完成。初始風量／音樂／導航3／5／5變成3／4／5。
+6. 未授權、舊版本、收權、授權逾時與斷線時操作受阻；恢復連線需重新配對／授權，不能重送已執行動作。這些權限邊界另有工程測試，先前target36的原生互動也實際觀察120秒到期禁止編輯、重新授權可繼續。
+
+桌面展示情境中的「安排一項誤解」手動改尚未執行的導航候選，畫面與回執來源都有人工安排標示；它不授權、不執行，不代表模型自然錯誤率。方案01只包含這段修復協作，沒有完整任務owner交接。參考[驗證結果與限制](VALIDATION.md)、[詳細研究](REPAIR_EVIDENCE_AND_TEST_PLAN.md)及[隊友審查簡報](repair-proposal.pdf)（12頁）。
+
+最終兩個target34 APK已重建、aapt核對、安裝並在兩個AVD實際走完上述無注入文字流程：[乘客局部取消](evidence/native/repair-passenger-final.png)、[駕駛最新摘要](evidence/native/repair-driver-final-candidate.png)、[駕駛回執與3／4／5](evidence/native/repair-driver-final.png)。兩次[真Qwen trace](evidence/native/repair-final-qwen-traces.txt)及[完成狀態JSON](evidence/native/repair-final-status.json)另存。這次沒有手動故障或按鈕修導航，是局部改口／取消的原生證據，不代表自然錯誤修復率或人體效益，也不能與A/B/C/D的修復計時混用。
+
+先前target36的手動導航誤解與混合文字＋按鈕流程另保留[乘客](evidence/native/repair-passenger-revised.png)、[駕駛](evidence/native/repair-driver-revised.png)、[回執](evidence/native/repair-driver-complete.png)；該次實際觀察120秒到期禁止編輯、重新授權可繼續，不能將人工故障當模型自然誤判。
 
 | 連接 | 用途 |
 |---|---|
 | PC `127.0.0.1:8778` | 本地 Qwen API，alias 必須是 `Qwen2.5-1.5B-Instruct` |
 | 平板 `10.0.2.2:8778` | Android 模擬器存取 PC 的模型 |
-| 平板 Hub `8767/repair` | 只讀狀態與原座艙事件 |
+| 平板 Hub `8767/repair` | 狀態／原座艙事件；配對駕駛可送授權、確認與取消，其他遠端連線只讀 |
 | PC adb forward `8767 → emulator-5554:8767` | 手機第二屏回連平板 Hub |
-| 手機 `ws://10.0.2.2:8767/repair` | 同步第二屏，不載入模型 |
+| 手機 `ws://10.0.2.2:8767/repair` | 駕駛摘要與配對權限指令，不載入模型 |
 
 `10.0.2.2` 是 Android 模擬器的宿主機位址，不是兩台實體平板的設定。只需本地推論及同步時，不要求持續連外網；首次安裝套件及下載模型仍需網路。
+
+最終88項工程測試通過、靜態分析No issues；含按鈕修另一項仍保留未回答澄清、禁止確認、回答後mock只執行一次。公開固定20例歷史未保護解析13/20，挑戰修正後保護鏈路重跑20/20，14次真Qwen＋6次規則澄清；題目已看過並用來調守門規則，不是獨立未見測試或SLM獨力100%。新16例開發者挑戰首次10/16（12真Qwen＋4規則），修後同批已見回歸12/16（10真Qwen＋6規則），仍有4項契約缺口；預期與首次紀錄保留，不是人類／母體驗證。不能把20/20推成一般語言都能理解。現存A/B/C/D是修正前各一次機器回放，有真模型／WebSocket與模擬ACK，沒有受試者、ASR或人體效益量測。數據、失敗及raw輸出見[VALIDATION.md](VALIDATION.md)。
+
+[最終驗證JSON](evidence/final-validation.json)統一保存工程結果、web release成功、兩APK規格、原生流程、source／APK SHA與未測限制；不把成功建置或模擬器互動當成S9實測。
+
+Android語音橋接已加入嚴格on-device ASR：裝置／繁體中文模型不支持時顯示未就緒並回文字，不切雲端。這套模擬器助手使用`-no-audio`啟動AVD，**不是麥克風／ASR測試**；S9真機、本地語音與斷外網兩實體全流程仍未驗證。程式存在不能稱完成S9離線能力。
 
 模型程序隱藏在背景，log 存於 `.local/desktop-demo/logs`。如果 8778 已有服務，助手只在確認精確模型 alias 後沿用；無關埠占用、錯誤模型、錯誤 AVD、缺 APK 時會停止，不殺其他程序、不 wipe、不卸載。`start-qwen-server.ps1` 也可單獨呼叫，接受 `-ServerPath`／`-ModelPath`；它會輸出新程序 PID，模型真正就緒由 API 與雙屏助手另行確認。
 

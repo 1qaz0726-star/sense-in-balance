@@ -1,0 +1,363 @@
+{
+  "name": "開發者撰寫的新挑戰集",
+  "expected_written_date": "2026-10-12",
+  "expectations_frozen_before_run": true,
+  "authoring_note": "Developer-authored after reviewing the current parser and published fixed 20 cases. Newly written sentences are not independent human validation, population accuracy, or an untouched holdout. Expected results were written before this run and will not be edited to match output.",
+  "evaluation_scope": "Guarded production text parser, semantic patch and projected pending only; no actuator, ASR, S9 or usability testing. Clarification success checks presence, not wording quality.",
+  "cases": [
+    {
+      "id": "N01",
+      "category": "自然改口",
+      "text": "後座風量先降一格……等等，改成升一格，其他照舊。",
+      "pending": {
+        "rearFan": "decrease",
+        "mediaVolume": "decrease",
+        "navVolume": "keep"
+      },
+      "unresolved_text": null,
+      "clarification": null,
+      "expected_changes": {
+        "rearFan": "increase"
+      },
+      "expect_clarification": false,
+      "predeclared_ambiguity": false,
+      "expectation_reason": "明示改口，採最後的提高風量；其他需求保留。",
+      "expected_pending": {
+        "rearFan": "increase",
+        "mediaVolume": "decrease",
+        "navVolume": "keep"
+      }
+    },
+    {
+      "id": "N02",
+      "category": "否定與延續",
+      "text": "音樂別再降低，請比現在大一點；導航音量照原本安排。",
+      "pending": {
+        "rearFan": "decrease",
+        "mediaVolume": "decrease",
+        "navVolume": "keep"
+      },
+      "unresolved_text": null,
+      "clarification": null,
+      "expected_changes": {
+        "mediaVolume": "increase"
+      },
+      "expect_clarification": false,
+      "predeclared_ambiguity": false,
+      "expectation_reason": "音樂明示提高；導航僅延續先前安排，不新增keep。",
+      "expected_pending": {
+        "rearFan": "decrease",
+        "mediaVolume": "increase",
+        "navVolume": "keep"
+      }
+    },
+    {
+      "id": "N03",
+      "category": "多項精確修改",
+      "text": "導航先保持現在音量，後座風量則繼續降低。",
+      "pending": {
+        "rearFan": "decrease",
+        "mediaVolume": "decrease",
+        "navVolume": "keep"
+      },
+      "unresolved_text": null,
+      "clarification": null,
+      "expected_changes": {
+        "navVolume": "keep",
+        "rearFan": "decrease"
+      },
+      "expect_clarification": false,
+      "predeclared_ambiguity": false,
+      "expectation_reason": "兩項皆有明確操作，未提音樂不得修改。",
+      "expected_pending": {
+        "rearFan": "decrease",
+        "mediaVolume": "decrease",
+        "navVolume": "keep"
+      }
+    },
+    {
+      "id": "N04",
+      "category": "部分取消",
+      "text": "取消導航那一項，後座風量和音樂仍按剛才安排。",
+      "pending": {
+        "rearFan": "decrease",
+        "mediaVolume": "decrease",
+        "navVolume": "keep"
+      },
+      "unresolved_text": null,
+      "clarification": null,
+      "expected_changes": {
+        "navVolume": "remove"
+      },
+      "expect_clarification": false,
+      "predeclared_ambiguity": false,
+      "expectation_reason": "只移除導航待辦，另兩項延續且不回傳新操作。",
+      "expected_pending": {
+        "rearFan": "decrease",
+        "mediaVolume": "decrease"
+      }
+    },
+    {
+      "id": "N05",
+      "category": "否定對象",
+      "text": "我不要的是音樂調整，不是後座風量；請只撤掉音樂。",
+      "pending": {
+        "rearFan": "decrease",
+        "mediaVolume": "decrease",
+        "navVolume": "keep"
+      },
+      "unresolved_text": null,
+      "clarification": null,
+      "expected_changes": {
+        "mediaVolume": "remove"
+      },
+      "expect_clarification": false,
+      "predeclared_ambiguity": false,
+      "expectation_reason": "明示只撤掉音樂，否定後座風量是澄清取消對象。",
+      "expected_pending": {
+        "rearFan": "decrease",
+        "navVolume": "keep"
+      }
+    },
+    {
+      "id": "N06",
+      "category": "否定取消",
+      "text": "別取消音樂，取消的是後座風量。",
+      "pending": {
+        "rearFan": "decrease",
+        "mediaVolume": "decrease",
+        "navVolume": "keep"
+      },
+      "unresolved_text": null,
+      "clarification": null,
+      "expected_changes": {
+        "rearFan": "remove"
+      },
+      "expect_clarification": false,
+      "predeclared_ambiguity": false,
+      "expectation_reason": "別取消音樂是保留既有待辦，不能改成remove或keep。",
+      "expected_pending": {
+        "mediaVolume": "decrease",
+        "navVolume": "keep"
+      }
+    },
+    {
+      "id": "N07",
+      "category": "部分取消加新調整",
+      "text": "音樂先不用改了，導航聲音反而要提高，其他保留。",
+      "pending": {
+        "rearFan": "decrease",
+        "mediaVolume": "decrease",
+        "navVolume": "keep"
+      },
+      "unresolved_text": null,
+      "clarification": null,
+      "expected_changes": {
+        "mediaVolume": "remove",
+        "navVolume": "increase"
+      },
+      "expect_clarification": false,
+      "predeclared_ambiguity": false,
+      "expectation_reason": "一項撤回、一項提高，風量原待辦保留。",
+      "expected_pending": {
+        "rearFan": "decrease",
+        "navVolume": "increase"
+      }
+    },
+    {
+      "id": "N08",
+      "category": "有限範圍集合指代",
+      "text": "把兩個音量的待辦取消，風量維持剛才的計畫。",
+      "pending": {
+        "rearFan": "decrease",
+        "mediaVolume": "decrease",
+        "navVolume": "keep"
+      },
+      "unresolved_text": null,
+      "clarification": null,
+      "expected_changes": {
+        "mediaVolume": "remove",
+        "navVolume": "remove"
+      },
+      "expect_clarification": false,
+      "predeclared_ambiguity": false,
+      "expectation_reason": "固定三欄中兩個音量唯一指音樂和導航；風量僅延續。",
+      "expected_pending": {
+        "rearFan": "decrease"
+      }
+    },
+    {
+      "id": "N09",
+      "category": "全撤回同義說法",
+      "text": "剛才三件事都撤回，先不要套用。",
+      "pending": {
+        "rearFan": "decrease",
+        "mediaVolume": "decrease",
+        "navVolume": "keep"
+      },
+      "unresolved_text": null,
+      "clarification": null,
+      "expected_changes": {
+        "rearFan": "remove",
+        "mediaVolume": "remove",
+        "navVolume": "remove"
+      },
+      "expect_clarification": false,
+      "predeclared_ambiguity": false,
+      "expectation_reason": "已知pending恰為三項，明示全撤回；不應執行。",
+      "expected_pending": {}
+    },
+    {
+      "id": "N10",
+      "category": "缺乏可靠次序的指代",
+      "text": "我只想撤回最後那個，其他兩件繼續。",
+      "pending": {
+        "rearFan": "decrease",
+        "mediaVolume": "decrease",
+        "navVolume": "keep"
+      },
+      "unresolved_text": null,
+      "clarification": null,
+      "expected_changes": {},
+      "expect_clarification": true,
+      "predeclared_ambiguity": true,
+      "expectation_reason": "快照只有設定map，無自然語言前次敘述次序；不可猜最後是誰。",
+      "expected_pending": {
+        "rearFan": "decrease",
+        "mediaVolume": "decrease",
+        "navVolume": "keep"
+      }
+    },
+    {
+      "id": "N11",
+      "category": "未辨明的集合指代",
+      "text": "那兩項都保留，只把另一項停掉。",
+      "pending": {
+        "rearFan": "decrease",
+        "mediaVolume": "decrease",
+        "navVolume": "keep"
+      },
+      "unresolved_text": null,
+      "clarification": null,
+      "expected_changes": {},
+      "expect_clarification": true,
+      "predeclared_ambiguity": true,
+      "expectation_reason": "未指明兩項或另一項身分，必須澄清且不改任何pending。",
+      "expected_pending": {
+        "rearFan": "decrease",
+        "mediaVolume": "decrease",
+        "navVolume": "keep"
+      }
+    },
+    {
+      "id": "N12",
+      "category": "缺槽回答對象",
+      "text": "導航提示",
+      "pending": {
+        "rearFan": "decrease",
+        "mediaVolume": "decrease",
+        "navVolume": "keep"
+      },
+      "unresolved_text": "剛才那項先取消。",
+      "clarification": "你要取消後座風量、音樂，還是導航音量？",
+      "expected_changes": {
+        "navVolume": "remove"
+      },
+      "expect_clarification": false,
+      "predeclared_ambiguity": false,
+      "expectation_reason": "前次未釐清句要求取消，這次只補對象，不是新keep。",
+      "expected_pending": {
+        "rearFan": "decrease",
+        "mediaVolume": "decrease"
+      }
+    },
+    {
+      "id": "N13",
+      "category": "缺槽回答操作",
+      "text": "大聲一點就好。",
+      "pending": {
+        "rearFan": "decrease",
+        "mediaVolume": "decrease",
+        "navVolume": "keep"
+      },
+      "unresolved_text": "導航提示我想調整。",
+      "clarification": "希望導航音量變大還是變小？",
+      "expected_changes": {
+        "navVolume": "increase"
+      },
+      "expect_clarification": false,
+      "predeclared_ambiguity": false,
+      "expectation_reason": "上下文唯一待釐清對象是導航，回答只補操作。",
+      "expected_pending": {
+        "rearFan": "decrease",
+        "mediaVolume": "decrease",
+        "navVolume": "increase"
+      }
+    },
+    {
+      "id": "N14",
+      "category": "不支援操作與支持項混合",
+      "text": "座椅有點冰，幫我開後座加熱，音樂不要變。",
+      "pending": {
+        "rearFan": "decrease",
+        "mediaVolume": "decrease",
+        "navVolume": "keep"
+      },
+      "unresolved_text": null,
+      "clarification": null,
+      "expected_changes": {},
+      "expect_clarification": true,
+      "predeclared_ambiguity": false,
+      "expectation_reason": "座椅加熱不在三項白名單；按既有prompt須空changes並說明／澄清支援範圍。",
+      "expected_pending": {
+        "rearFan": "decrease",
+        "mediaVolume": "decrease",
+        "navVolume": "keep"
+      }
+    },
+    {
+      "id": "N15",
+      "category": "同字控制但不支援參數",
+      "text": "後座冷氣要改成二十二度，音樂照舊。",
+      "pending": {
+        "rearFan": "decrease",
+        "mediaVolume": "decrease",
+        "navVolume": "keep"
+      },
+      "unresolved_text": null,
+      "clarification": null,
+      "expected_changes": {},
+      "expect_clarification": true,
+      "predeclared_ambiguity": false,
+      "expectation_reason": "溫度設定不是rearFan增減，不可把22度猜成降低風量。",
+      "expected_pending": {
+        "rearFan": "decrease",
+        "mediaVolume": "decrease",
+        "navVolume": "keep"
+      }
+    },
+    {
+      "id": "N16",
+      "category": "自然改口與最後決定",
+      "text": "音樂提高一點；不對，音樂不要提高，音樂就維持現在這樣。",
+      "pending": {
+        "rearFan": "decrease",
+        "mediaVolume": "decrease",
+        "navVolume": "keep"
+      },
+      "unresolved_text": null,
+      "clarification": null,
+      "expected_changes": {
+        "mediaVolume": "keep"
+      },
+      "expect_clarification": false,
+      "predeclared_ambiguity": false,
+      "expectation_reason": "有明示不對改口和最後維持原值，非未釐清矛盾。",
+      "expected_pending": {
+        "rearFan": "decrease",
+        "mediaVolume": "keep",
+        "navVolume": "keep"
+      }
+    }
+  ]
+}

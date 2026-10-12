@@ -5,9 +5,10 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 import 'repair_task.dart';
+import 'repair_collaboration.dart';
 
-/// Read-only driver display. Only the local operator can change or confirm a
-/// task in this slice; multi-person authority is intentionally not invented.
+/// Read-only by default. With an explicit collaboration layer, one paired
+/// driver may grant edits and confirm this passenger's current task.
 class RepairHub {
   RepairHub(
     this.controller, {
@@ -16,6 +17,7 @@ class RepairHub {
     this.cabinState,
     this.cockpitEvent,
     this.cockpitSignals,
+    this.collaboration,
   });
   final RepairController controller;
   final String Function() modelStatus;
@@ -23,14 +25,18 @@ class RepairHub {
   final Map<String, int> Function()? cabinState;
   final Map<String, dynamic>? Function()? cockpitEvent;
   final Listenable? cockpitSignals;
+  final RepairCollaboration? collaboration;
   HttpServer? _server;
   Timer? _heartbeat;
   int _generation = 0;
   final _clients = <WebSocket>{};
+  final _peers = <WebSocket, _RepairPeer>{};
+  void Function(Object)? _previousExpiryHandler;
+  void Function(Object)? _expiryHandler;
   List<String> addresses = [];
   static const port = 8767;
 
-  Map<String, dynamic> status() => {
+  Map<String, dynamic> status({Object? peer}) => {
     'type': 'repair_status',
     'schema': 1,
     'at': DateTime.now().millisecondsSinceEpoch,
@@ -39,6 +45,11 @@ class RepairHub {
     if (cabinState != null) 'cabin_state': cabinState!(),
     if (cockpitEvent != null) 'cockpit_event': cockpitEvent!(),
     'task': controller.snapshot.toJson(),
+    if (collaboration != null)
+      'role': peer != null && collaboration!.isDriver(peer)
+          ? 'driver'
+          : 'observer',
+    if (collaboration != null) 'collaboration': collaboration!.toJson(),
   };
 
   Future<void> start() async {
@@ -66,20 +77,45 @@ class RepairHub {
     if (generation != _generation) return;
     controller.addListener(_broadcast);
     cockpitSignals?.addListener(_broadcast);
+    collaboration?.addListener(_broadcast);
+    if (collaboration != null) {
+      _previousExpiryHandler = collaboration!.onDriverExpired;
+      _expiryHandler = (peer) {
+        if (peer is WebSocket) {
+          _remove(peer);
+          unawaited(peer.close());
+        }
+        _previousExpiryHandler?.call(peer);
+      };
+      collaboration!.onDriverExpired = _expiryHandler;
+    }
     _heartbeat = Timer.periodic(
       const Duration(seconds: 1),
       (_) => _broadcast(),
     );
     server.listen((request) async {
+      if (generation != _generation || _server == null) {
+        await request.response.close();
+        return;
+      }
       if (request.uri.path == '/repair' &&
           WebSocketTransformer.isUpgradeRequest(request)) {
         final socket = await WebSocketTransformer.upgrade(request);
+        if (generation != _generation || _server == null) {
+          await socket.close();
+          return;
+        }
         _clients.add(socket);
-        socket.add(jsonEncode(status()));
+        _peers[socket] = _RepairPeer();
+        socket.add(jsonEncode(status(peer: socket)));
         socket.listen(
-          (_) {},
-          onDone: () => _clients.remove(socket),
-          onError: (_) => _clients.remove(socket),
+          (message) {
+            if (collaboration != null && generation == _generation) {
+              _command(socket, message);
+            }
+          },
+          onDone: () => _remove(socket),
+          onError: (_) => _remove(socket),
         );
         return;
       }
@@ -112,12 +148,13 @@ class RepairHub {
   }
 
   void _broadcast() {
-    final message = jsonEncode(status());
+    if (_server == null) return;
+    collaboration?.checkTimeouts();
     for (final c in [..._clients]) {
       try {
-        c.add(message);
+        c.add(jsonEncode(status(peer: c)));
       } catch (_) {
-        _clients.remove(c);
+        _remove(c);
       }
     }
   }
@@ -126,14 +163,170 @@ class RepairHub {
     ++_generation; // A pending start must not revive a disposed screen.
     controller.removeListener(_broadcast);
     cockpitSignals?.removeListener(_broadcast);
+    collaboration?.removeListener(_broadcast);
+    if (collaboration != null &&
+        identical(collaboration!.onDriverExpired, _expiryHandler)) {
+      collaboration!.onDriverExpired = _previousExpiryHandler;
+    }
     _heartbeat?.cancel();
     _heartbeat = null;
     final server = _server;
     _server = null;
     for (final c in [..._clients]) {
+      _remove(c);
       await c.close();
     }
     _clients.clear();
+    _peers.clear();
     await server?.close(force: true);
   }
+
+  void _remove(WebSocket socket) {
+    _clients.remove(socket);
+    _peers.remove(socket);
+    collaboration?.disconnectDriver(socket);
+  }
+
+  void _command(WebSocket socket, Object? raw) {
+    final peer = _peers[socket];
+    final c = collaboration;
+    if (peer == null || c == null) return;
+    String? id;
+    Map<String, dynamic> reply(bool accepted, String? error) => {
+      'type': 'repair_reply',
+      'command_id': id,
+      'accepted': accepted,
+      'error': error,
+    };
+    void send(Map<String, dynamic> message) {
+      if (!_clients.contains(socket)) return;
+      try {
+        socket.add(jsonEncode(message));
+      } catch (_) {
+        _remove(socket);
+      }
+    }
+
+    try {
+      if (raw is! String || raw.length > 8192) {
+        throw const FormatException('指令格式或長度不合法。');
+      }
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map<String, dynamic>) {
+        throw const FormatException('指令須為 JSON object。');
+      }
+      if (decoded['command_id'] is String &&
+          (decoded['command_id'] as String).isNotEmpty &&
+          (decoded['command_id'] as String).length <= 80) {
+        id = decoded['command_id'] as String;
+      }
+      final keys = <String>{};
+      for (final match in RegExp(r'"((?:[^"\\]|\\.)*)"\s*:').allMatches(raw)) {
+        final key = jsonDecode('"${match.group(1)}"') as String;
+        if (!keys.add(key)) throw const FormatException('指令不得有重複欄位。');
+      }
+      final action = decoded['action'];
+      final allowed = <String>{
+        'type',
+        'command_id',
+        'action',
+        if (action == 'pair_driver') 'pairing_code',
+        if (const {
+          'grant',
+          'revoke',
+          'confirm',
+          'cancel',
+        }.contains(action)) ...[
+          'task_id',
+          'revision',
+        ],
+      };
+      if (id == null ||
+          decoded['type'] != 'repair_command' ||
+          decoded.keys.any((key) => !allowed.contains(key)) ||
+          decoded.length != allowed.length ||
+          !const {
+            'pair_driver',
+            'heartbeat',
+            'grant',
+            'revoke',
+            'confirm',
+            'cancel',
+          }.contains(action)) {
+        throw const FormatException('不支援的指令或欄位。');
+      }
+      final canonical = Map.fromEntries(
+        decoded.entries.toList()..sort((a, b) => a.key.compareTo(b.key)),
+      );
+      final fingerprint = jsonEncode(canonical);
+      final cached = peer.replies[id];
+      if (cached != null) {
+        send(
+          cached.$1 == fingerprint ? cached.$2 : reply(false, '同一指令 ID 不可改內容。'),
+        );
+        return;
+      }
+      bool accepted = false;
+      String? error;
+      if (action == 'pair_driver') {
+        final code = decoded['pairing_code'];
+        if (code is! String || !RegExp(r'^\d{6}$').hasMatch(code)) {
+          throw const FormatException('配對碼須為六位數字。');
+        }
+        final now = DateTime.now();
+        if (peer.blockedUntil != null && now.isBefore(peer.blockedUntil!)) {
+          error = '配對嘗試過多，請稍後再試。';
+        } else {
+          accepted = c.pairDriver(socket, code);
+          if (accepted) {
+            peer.failedPairings = 0;
+          } else {
+            error = c.error;
+            if (++peer.failedPairings >= 3) {
+              peer.failedPairings = 0;
+              peer.blockedUntil = now.add(const Duration(seconds: 30));
+            }
+          }
+        }
+      } else if (action == 'heartbeat') {
+        accepted = c.heartbeat(socket);
+        if (!accepted) error = c.error;
+      } else {
+        final taskId = decoded['task_id'];
+        final revision = decoded['revision'];
+        if (taskId is! String ||
+            taskId.isEmpty ||
+            taskId.length > 120 ||
+            revision is! int ||
+            revision < 1) {
+          throw const FormatException('需求 ID 與版本不合法。');
+        }
+        accepted = switch (action) {
+          'grant' => c.grant(socket, taskId, revision),
+          'revoke' => c.revoke(socket, taskId, revision),
+          'confirm' => c.confirm(socket, taskId, revision),
+          'cancel' => c.cancelByDriver(socket, taskId, revision),
+          _ => false,
+        };
+        if (!accepted) error = c.error;
+      }
+      final response = reply(accepted, accepted ? null : (error ?? '指令未接受。'));
+      peer.replies[id] = (fingerprint, response);
+      if (peer.replies.length > 128) {
+        peer.replies.remove(peer.replies.keys.first);
+      }
+      send(response);
+      _broadcast();
+    } on FormatException catch (e) {
+      send(reply(false, e.message));
+    } catch (_) {
+      send(reply(false, '指令未接受，請查看最新狀態。'));
+    }
+  }
+}
+
+class _RepairPeer {
+  final replies = <String, (String, Map<String, dynamic>)>{};
+  int failedPairings = 0;
+  DateTime? blockedUntil;
 }

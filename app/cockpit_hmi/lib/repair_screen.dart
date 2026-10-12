@@ -10,9 +10,12 @@ import 'cockpit_instruments.dart';
 import 'hub.dart' as original;
 import 'protocol.dart';
 import 'repair_hub.dart';
+import 'repair_collaboration.dart';
+import 'repair_collaboration_widgets.dart';
 import 'repair_parser.dart';
 import 'repair_remote_model.dart';
 import 'repair_task.dart';
+import 'repair_speech.dart';
 import 'setup.dart';
 import 'slm.dart';
 
@@ -25,15 +28,24 @@ class RepairScreen extends StatefulWidget {
 class _RepairScreenState extends State<RepairScreen> {
   final input = TextEditingController();
   late final RepairController controller;
+  late final RepairCollaboration collaboration;
   late final RepairHub hub;
   late final RemoteRepairModel? remoteModel;
   final actuator = MockCabinActuator();
   final cockpit = original.Hub.I;
   bool ownsCockpit = false;
-  bool showInstruments = true;
+  bool showInstruments = false;
   bool lastFresh = false;
   Timer? cockpitWatch;
   String address = '正在準備另一台平板的連線…';
+  final speech = RepairSpeechInput();
+  bool speechAvailable = false;
+  bool speechListening = false;
+  int speechRequest = 0;
+  String? speechStatus;
+  String? previousTaskId;
+  Map<CabinSetting, RequestedChange> previousPending = const {};
+  Set<CabinSetting> changedSettings = {};
 
   bool get modelReady => remoteModel?.ready ?? Slm.I.ready;
   String get modelStatus => remoteModel?.status ?? modelStatusText(Slm.I);
@@ -82,8 +94,11 @@ class _RepairScreenState extends State<RepairScreen> {
       ).call,
       actuator: actuator.call,
     );
+    collaboration = RepairCollaboration(controller);
+    controller.addListener(_capturePendingChanges);
     hub = RepairHub(
       controller,
+      collaboration: collaboration,
       modelStatus: () => modelStatus,
       cabinState: () => {
         for (final entry in actuator.state.entries) entry.key.name: entry.value,
@@ -103,6 +118,7 @@ class _RepairScreenState extends State<RepairScreen> {
       },
     );
     unawaited(remoteModel?.boot() ?? Slm.I.boot());
+    unawaited(_checkSpeech());
     hub
         .start()
         .then((_) {
@@ -126,8 +142,12 @@ class _RepairScreenState extends State<RepairScreen> {
     cockpitWatch?.cancel();
     unawaited(hub.stop());
     if (ownsCockpit) unawaited(cockpit.stop());
-    controller.cancel();
+    controller.removeListener(_capturePendingChanges);
+    collaboration.cancel();
+    collaboration.dispose();
     controller.dispose();
+    speech.dispose();
+    ++speechRequest;
     input.dispose();
     remoteModel?.dispose();
     super.dispose();
@@ -149,57 +169,147 @@ class _RepairScreenState extends State<RepairScreen> {
         phase == RepairPhase.awaitingClarification ||
         phase == RepairPhase.failed;
     final accepted = active
-        ? await controller.revise(value)
-        : await controller.newTask(value);
+        ? await collaboration.revise(value)
+        : await collaboration.newTask(value);
     if (accepted && mounted) input.clear();
+  }
+
+  void _capturePendingChanges() {
+    final task = controller.snapshot;
+    if (task.taskId != previousTaskId) {
+      changedSettings = {};
+    } else if (task.phase != RepairPhase.parsing) {
+      final changed = {
+        for (final setting in CabinSetting.values)
+          if (previousPending[setting] != task.pending[setting]) setting,
+      };
+      if (changed.isNotEmpty) changedSettings = changed;
+    }
+    previousTaskId = task.taskId;
+    previousPending = task.pending;
+  }
+
+  Future<void> _checkSpeech() async {
+    try {
+      final available = await speech.isAvailable();
+      if (mounted) setState(() => speechAvailable = available);
+    } catch (_) {
+      if (mounted) setState(() => speechAvailable = false);
+    }
+  }
+
+  Future<void> _listenSpeech() async {
+    if (speechListening) {
+      ++speechRequest;
+      try {
+        await speech.cancel();
+      } catch (_) {
+        if (mounted) speechStatus = '語音已停止，請用文字輸入。';
+      } finally {
+        if (mounted) setState(() => speechListening = false);
+      }
+      return;
+    }
+    final request = ++speechRequest;
+    setState(() {
+      speechListening = true;
+      speechStatus = '正在聆聽；可按「停止聆聽」。';
+    });
+    try {
+      final text = await speech.listen(language: 'zh-TW');
+      if (mounted &&
+          request == speechRequest &&
+          text != null &&
+          text.trim().isNotEmpty) {
+        input.text = text.trim();
+        speechStatus = '辨識文字已填入；請核對後再提交候選。';
+      }
+    } on PlatformException catch (error) {
+      if (mounted && request == speechRequest) {
+        speechStatus = error.message ?? '離線語音未就緒，請用文字輸入。';
+      }
+    } on UnsupportedError catch (error) {
+      if (mounted && request == speechRequest) {
+        speechStatus = '${error.message}；請用文字輸入。';
+      }
+    } catch (_) {
+      if (mounted && request == speechRequest) {
+        speechStatus = '無法使用離線語音，請用文字輸入。';
+      }
+    } finally {
+      if (mounted && request == speechRequest) {
+        setState(() => speechListening = false);
+      }
+    }
   }
 
   void showConnection() {
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: CockpitStyle.panel,
-      showDragHandle: true,
-      builder: (sheetContext) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(28, 8, 28, 28),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '本地 AI 與雙屏連線',
-                style: cockpitText(22, weight: FontWeight.w600),
+      shape: const RoundedRectangleBorder(),
+      builder: (sheetContext) => AnimatedBuilder(
+        animation: Listenable.merge([collaboration, remoteModel ?? Slm.I]),
+        builder: (_, _) => SafeArea(
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(28, 8, 28, 28),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '連接駕駛屏',
+                    style: cockpitText(22, weight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    collaboration.pairingCode,
+                    style: cockpitText(
+                      38,
+                      letterSpacing: 8,
+                      weight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    '駕駛在另一個螢幕輸入此六位碼。\n配對後才可授權與確認；這裡不會直接套用。',
+                    style: cockpitText(14, color: CockpitStyle.muted),
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    modelStatus,
+                    style: cockpitText(15, color: CockpitStyle.muted),
+                  ),
+                  const SizedBox(height: 12),
+                  SelectableText(
+                    address,
+                    style: cockpitText(15, color: CockpitStyle.muted),
+                  ),
+                  const SizedBox(height: 20),
+                  FilledButton.icon(
+                    icon: Icon(
+                      remoteModel != null
+                          ? Icons.refresh_rounded
+                          : Icons.settings_outlined,
+                    ),
+                    label: Text(remoteModel != null ? '重新連接模型' : '開啟模型設定'),
+                    onPressed: () {
+                      Navigator.pop(sheetContext);
+                      if (remoteModel != null) {
+                        unawaited(remoteModel!.boot());
+                      } else {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const ModelSetupPage(),
+                          ),
+                        );
+                      }
+                    },
+                  ),
+                ],
               ),
-              const SizedBox(height: 16),
-              Text(
-                modelStatus,
-                style: cockpitText(15, color: CockpitStyle.muted),
-              ),
-              const SizedBox(height: 12),
-              SelectableText(
-                address,
-                style: cockpitText(15, color: CockpitStyle.muted),
-              ),
-              const SizedBox(height: 20),
-              FilledButton.icon(
-                icon: Icon(
-                  remoteModel != null
-                      ? Icons.refresh_rounded
-                      : Icons.settings_outlined,
-                ),
-                label: Text(remoteModel != null ? '重新連接模型' : '開啟模型設定'),
-                onPressed: () {
-                  Navigator.pop(sheetContext);
-                  if (remoteModel != null) {
-                    unawaited(remoteModel!.boot());
-                  } else {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const ModelSetupPage()),
-                    );
-                  }
-                },
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -215,6 +325,7 @@ class _RepairScreenState extends State<RepairScreen> {
         child: AnimatedBuilder(
           animation: Listenable.merge([
             controller,
+            collaboration,
             remoteModel ?? Slm.I,
             cockpit,
           ]),
@@ -285,7 +396,7 @@ class _RepairScreenState extends State<RepairScreen> {
                     children: [
                       Expanded(
                         child: Text(
-                          '平板操作 · 第二屏同步',
+                          '乘客提出需求 · 駕駛確認後才套用',
                           style: cockpitText(11, color: CockpitStyle.muted),
                         ),
                       ),
@@ -344,11 +455,14 @@ class _RepairScreenState extends State<RepairScreen> {
         ],
         const CockpitClock(),
         const SizedBox(width: 16),
-        IconButton(
-          tooltip: '本地 AI 與雙屏連線',
-          onPressed: showConnection,
-          icon: const Icon(Icons.tune, size: 19, color: CockpitStyle.muted),
-        ),
+        if (MediaQuery.sizeOf(context).width >= 620)
+          TextButton(onPressed: showConnection, child: const Text('連接駕駛屏'))
+        else
+          IconButton(
+            tooltip: '連接駕駛屏',
+            onPressed: showConnection,
+            icon: const Icon(Icons.link, size: 19, color: CockpitStyle.muted),
+          ),
       ],
     ),
   );
@@ -374,7 +488,7 @@ class _RepairScreenState extends State<RepairScreen> {
               ),
             ),
             child: Text(
-              instruments ? '行車儀表' : '座艙主控',
+              instruments ? '行車儀表' : '乘客協助',
               style: cockpitText(
                 16,
                 color: showInstruments == instruments
@@ -492,6 +606,14 @@ class _RepairScreenState extends State<RepairScreen> {
                   seconds: 10,
                 ),
               ),
+              if (const bool.fromEnvironment('REPAIR_DESKTOP_DEMO'))
+                _sceneControl(
+                  '安排一項誤解',
+                  Icons.edit_note,
+                  controller.snapshot.phase == RepairPhase.awaitingConfirmation
+                      ? () => collaboration.injectDemoMisunderstanding()
+                      : null,
+                ),
             ],
           ),
         ),
@@ -499,7 +621,7 @@ class _RepairScreenState extends State<RepairScreen> {
     ),
   );
 
-  Widget _sceneControl(String label, IconData icon, VoidCallback action) =>
+  Widget _sceneControl(String label, IconData icon, VoidCallback? action) =>
       Padding(
         padding: const EdgeInsets.only(right: 22),
         child: TextButton.icon(
@@ -565,6 +687,10 @@ class _RepairScreenState extends State<RepairScreen> {
   );
 
   Widget _taskPanel(RepairSnapshot task) {
+    final collaborationState = collaboration.toJson();
+    final demoFault =
+        collaborationState['demo_fault'] ??
+        collaborationState['demo_fault_source'];
     final busy =
         task.phase == RepairPhase.parsing ||
         task.phase == RepairPhase.executing ||
@@ -574,7 +700,7 @@ class _RepairScreenState extends State<RepairScreen> {
         task.phase == RepairPhase.awaitingClarification ||
         task.phase == RepairPhase.failed;
     final canCancel = task.phase == RepairPhase.parsing || revising;
-    final canConfirm = task.phase == RepairPhase.awaitingConfirmation;
+    final canInput = !busy && (!revising || collaboration.canRevise);
     final tone = task.phase == RepairPhase.completed
         ? CockpitStyle.accent
         : CockpitStyle.amber;
@@ -587,7 +713,7 @@ class _RepairScreenState extends State<RepairScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Text(
-                  '座艙需求',
+                  '乘客協助 · 不用重講',
                   style: cockpitText(
                     12,
                     color: CockpitStyle.muted,
@@ -596,7 +722,7 @@ class _RepairScreenState extends State<RepairScreen> {
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  revising ? '只說要修改的部分' : '改一件事，其餘記得住',
+                  revising ? '只改這一項，其餘保留' : '先提出需求，駕駛來確認',
                   style: cockpitText(27, weight: FontWeight.w400),
                 ),
                 const SizedBox(height: 12),
@@ -605,7 +731,7 @@ class _RepairScreenState extends State<RepairScreen> {
                   minLines: 2,
                   maxLines: 2,
                   maxLength: 500,
-                  enabled: !busy,
+                  enabled: canInput && !speechListening,
                   style: cockpitText(19),
                   decoration: InputDecoration(
                     counterText: '',
@@ -615,13 +741,41 @@ class _RepairScreenState extends State<RepairScreen> {
                   ),
                 ),
                 const SizedBox(height: 10),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 6,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    TextButton.icon(
+                      onPressed:
+                          speechListening || (canInput && speechAvailable)
+                          ? _listenSpeech
+                          : null,
+                      icon: Icon(
+                        speechListening ? Icons.stop : Icons.mic_none,
+                        size: 17,
+                      ),
+                      label: Text(speechListening ? '停止聆聽' : '說出需求'),
+                    ),
+                    if (!speechAvailable)
+                      Text(
+                        '離線語音未就緒，請用文字',
+                        style: cockpitText(11, color: CockpitStyle.muted),
+                      ),
+                  ],
+                ),
+                if (speechStatus != null)
+                  Text(
+                    speechStatus!,
+                    style: cockpitText(12, color: CockpitStyle.muted),
+                  ),
                 Row(
                   children: [
                     Expanded(
                       child: Align(
                         alignment: Alignment.centerLeft,
                         child: TextButton(
-                          onPressed: busy
+                          onPressed: !canInput || speechListening
                               ? null
                               : () => input.text = revising
                                     ? '風量先不用改，其餘照剛剛。'
@@ -635,7 +789,9 @@ class _RepairScreenState extends State<RepairScreen> {
                       ),
                     ),
                     FilledButton.icon(
-                      onPressed: busy || !modelReady ? null : submit,
+                      onPressed: !canInput || speechListening || !modelReady
+                          ? null
+                          : submit,
                       style: FilledButton.styleFrom(
                         minimumSize: const Size(145, 46),
                         textStyle: cockpitText(15, weight: FontWeight.w500),
@@ -655,8 +811,8 @@ class _RepairScreenState extends State<RepairScreen> {
                             : busy
                             ? '處理中'
                             : revising
-                            ? '更新需求'
-                            : '整理需求',
+                            ? '更新候選摘要'
+                            : '送給駕駛看',
                       ),
                     ),
                   ],
@@ -672,11 +828,15 @@ class _RepairScreenState extends State<RepairScreen> {
                     weight: FontWeight.w500,
                   ),
                 ),
+                if (demoFault is Map) ...[
+                  const SizedBox(height: 10),
+                  DemoFaultNotice(fault: demoFault),
+                ],
                 if (task.phase == RepairPhase.idle ||
                     task.phase == RepairPhase.cancelled) ...[
                   const SizedBox(height: 8),
                   Text(
-                    '一次說出多個需求，也能只改其中一項。\n確認後才套用模擬設定。',
+                    '先整理候選，設定不會改動。\n駕駛授權後可局部修正，最後由駕駛確認模擬套用。',
                     style: cockpitText(
                       13,
                       color: CockpitStyle.muted,
@@ -691,49 +851,37 @@ class _RepairScreenState extends State<RepairScreen> {
                     style: cockpitText(13, color: CockpitStyle.muted),
                   ),
                 ],
-                if (task.phase != RepairPhase.indeterminate)
-                  for (final entry in task.pending.entries)
-                    Container(
-                      padding: const EdgeInsets.symmetric(vertical: 11),
-                      decoration: const BoxDecoration(
-                        border: Border(
-                          bottom: BorderSide(
-                            color: CockpitStyle.line,
-                            width: .5,
-                          ),
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            _settingIcon(entry.key),
-                            size: 18,
-                            color: CockpitStyle.muted,
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              _settingName(entry.key),
-                              style: cockpitText(16),
-                            ),
-                          ),
-                          Text(
-                            _changeName(entry.value),
-                            style: cockpitText(
-                              16,
-                              color: entry.value == RequestedChange.keep
-                                  ? CockpitStyle.muted
-                                  : CockpitStyle.accent,
-                            ),
-                          ),
-                        ],
+                if (task.phase != RepairPhase.indeterminate) ...[
+                  const SizedBox(height: 12),
+                  if (changedSettings.isNotEmpty &&
+                      task.revision > 1 &&
+                      revising)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Text(
+                        '這次只改：${changedSettings.map(_settingName).join('、')}；其餘保留',
+                        style: cockpitText(13, color: CockpitStyle.accent),
                       ),
                     ),
+                  PassengerCandidateEditor(
+                    pending: task.pending,
+                    canRevise:
+                        collaboration.canRevise && !busy && !speechListening,
+                    changedSettings: changedSettings,
+                    onPatch: (setting, change) =>
+                        collaboration.directPatch(setting, change),
+                  ),
+                ],
                 if (task.clarification != null) ...[
                   const SizedBox(height: 12),
                   Text(
                     task.clarification!,
                     style: cockpitText(16, color: CockpitStyle.amber),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '逐項按鈕可改候選；請在上方回答，完成釐清後再確認。',
+                    style: cockpitText(12, color: CockpitStyle.muted),
                   ),
                 ],
                 if (task.error != null) ...[
@@ -741,6 +889,17 @@ class _RepairScreenState extends State<RepairScreen> {
                   Text(
                     task.error!,
                     style: cockpitText(14, color: CockpitStyle.amber),
+                  ),
+                  Text(
+                    '駕駛授權後，可用上方「改這一項」逐項提出候選，最後仍須駕駛確認。',
+                    style: cockpitText(12, color: CockpitStyle.muted),
+                  ),
+                ],
+                if (collaboration.error != null) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    collaboration.error!,
+                    style: cockpitText(13, color: CockpitStyle.amber),
                   ),
                 ],
                 if (task.phase == RepairPhase.completed) ...[
@@ -755,45 +914,68 @@ class _RepairScreenState extends State<RepairScreen> {
             ),
           ),
         ),
-        if (canCancel)
-          Container(
-            padding: const EdgeInsets.only(top: 12),
-            decoration: const BoxDecoration(
-              border: Border(
-                top: BorderSide(color: CockpitStyle.line, width: .5),
-              ),
-            ),
-            child: Row(
-              children: [
-                if (canConfirm)
-                  Expanded(
-                    child: FilledButton(
-                      onPressed: () =>
-                          controller.confirm(task.taskId!, task.revision),
-                      style: FilledButton.styleFrom(
-                        minimumSize: const Size(100, 48),
-                        textStyle: cockpitText(16, weight: FontWeight.w500),
-                      ),
-                      child: const Text('確認套用（模擬）'),
-                    ),
-                  )
-                else
-                  Expanded(
-                    child: Text(
-                      '尚未更動座艙',
-                      style: cockpitText(13, color: CockpitStyle.muted),
-                    ),
-                  ),
-                const SizedBox(width: 18),
-                TextButton(
-                  onPressed: () => controller.cancel(),
-                  child: const Text('取消需求'),
-                ),
-              ],
+        Container(
+          padding: const EdgeInsets.only(top: 12),
+          decoration: const BoxDecoration(
+            border: Border(
+              top: BorderSide(color: CockpitStyle.line, width: .5),
             ),
           ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      revising
+                          ? '等待駕駛確認'
+                          : task.phase == RepairPhase.completed
+                          ? '駕駛已確認 · 模擬回報已收到'
+                          : '候選不會直接執行',
+                      style: cockpitText(15, color: CockpitStyle.accent),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _authorizationText(task),
+                      style: cockpitText(11, color: CockpitStyle.muted),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 18),
+              TextButton(
+                onPressed: canCancel ? () => collaboration.cancel() : null,
+                child: const Text('取消需求'),
+              ),
+            ],
+          ),
+        ),
       ],
     );
+  }
+
+  String _authorizationText(RepairSnapshot task) {
+    final state = collaboration.toJson();
+    if (state['paired'] != true || state['driver_online'] != true) {
+      return '駕駛屏未連接 · 可先提出候選，尚未套用';
+    }
+    if (collaboration.canRevise) {
+      final expiry = state['authorization_expires_at'];
+      final seconds = expiry is num
+          ? ((expiry - DateTime.now().millisecondsSinceEpoch) / 1000)
+                .ceil()
+                .clamp(0, 120)
+          : 0;
+      return '駕駛已授權本次需求 · 剩餘 $seconds 秒';
+    }
+    final expiry = state['authorization_expires_at'];
+    if (expiry is num &&
+        expiry <= DateTime.now().millisecondsSinceEpoch &&
+        state['authorization_task_id'] == task.taskId) {
+      return '授權已到期 · 請駕駛重新授權後再修改';
+    }
+    return '駕駛已連接 · 修改前須由駕駛授權';
   }
 
   Widget _levels(RepairSnapshot task) => Container(
@@ -901,10 +1083,10 @@ String _changeName(RequestedChange value) => switch (value) {
   RequestedChange.remove => '取消變更',
 };
 String _phaseText(RepairPhase value) => switch (value) {
-  RepairPhase.idle => '座艙已就緒，等你開口',
+  RepairPhase.idle => '可先提出候選需求，尚未執行',
   RepairPhase.parsing => '正在理解；尚未執行',
-  RepairPhase.awaitingClarification => '需要你補充一件事',
-  RepairPhase.awaitingConfirmation => '確認這次的調整',
+  RepairPhase.awaitingClarification => '需補充一項；駕駛授權後再修改',
+  RepairPhase.awaitingConfirmation => '候選已整理，等待駕駛確認',
   RepairPhase.executing => '正在執行（模擬）',
   RepairPhase.completed => '這次調整已完成',
   RepairPhase.cancelled => '待執行需求已取消',

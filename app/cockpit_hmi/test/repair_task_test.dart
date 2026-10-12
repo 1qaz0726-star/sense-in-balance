@@ -10,6 +10,161 @@ IntentPatch patch(
 }) => IntentPatch(changes: changes, clarification: clarification);
 
 void main() {
+  test('新的完整矛盾需求取代舊澄清原句，缺槽補充使用新上下文', () async {
+    const oldText = '那個不用改';
+    const newText = '導航音量提高，但導航音量維持原值。';
+    const oldQuestion = '你是指風量、音樂，還是導航？';
+    const newQuestion = '導航音量要提高，還是維持原值？';
+    final controller = RepairController(
+      parser: (text, snapshot) async {
+        if (text == oldText) {
+          return IntentPatch(changes: {}, clarification: oldQuestion);
+        }
+        if (text == newText) {
+          expect(snapshot.unresolvedText, oldText);
+          return IntentPatch(
+            changes: {},
+            clarification: newQuestion,
+            unresolvedTextOverride: newText,
+          );
+        }
+        expect(text, '維持原值');
+        expect(snapshot.unresolvedText, newText);
+        expect(snapshot.clarification, newQuestion);
+        expect(snapshot.unresolvedText, isNot(oldText));
+        return IntentPatch(
+          changes: {CabinSetting.navVolume: RequestedChange.keep},
+        );
+      },
+      actuator: MockCabinActuator().call,
+    );
+    addTearDown(controller.dispose);
+    await controller.newTask(oldText);
+    await controller.revise(newText);
+    expect(controller.snapshot.phase, RepairPhase.awaitingClarification);
+    expect(controller.snapshot.unresolvedText, newText);
+    expect(controller.snapshot.clarification, newQuestion);
+    await controller.revise('維持原值');
+    expect(controller.snapshot.phase, RepairPhase.awaitingConfirmation);
+    expect(
+      controller.snapshot.pending[CabinSetting.navVolume],
+      RequestedChange.keep,
+    );
+    expect(controller.snapshot.unresolvedText, isNull);
+  });
+
+  test('直接差異的內部澄清原句可覆寫，但模型JSON仍只接受兩欄', () async {
+    final controller = RepairController(
+      parser: (_, _) async => IntentPatch(changes: {}, clarification: '哪一項？'),
+      actuator: MockCabinActuator().call,
+    );
+    addTearDown(controller.dispose);
+    await controller.newTask('那個不用改');
+    expect(
+      controller.applyPatch(
+        IntentPatch(
+          changes: {},
+          clarification: '是要調整風量嗎？',
+          unresolvedTextOverride: '幫我把後座座椅加熱。',
+        ),
+      ),
+      isTrue,
+    );
+    expect(controller.snapshot.unresolvedText, '幫我把後座座椅加熱。');
+    expect(
+      () => IntentPatch.fromModelOutput(
+        '{"changes":{},"clarification":"哪一項？","unresolvedTextOverride":"新句子"}',
+      ),
+      throwsFormatException,
+    );
+  });
+  test('模擬ACK每項記錄確切前後值與keep，去重不改紀錄', () async {
+    final mock = MockCabinActuator();
+    final changes = {
+      CabinSetting.rearFan: RequestedChange.decrease,
+      CabinSetting.navVolume: RequestedChange.keep,
+    };
+    final receipt = await mock.call(changes, 'items_1');
+    expect(receipt.items, {
+      CabinSetting.rearFan: {
+        'before': 3,
+        'after': 2,
+        'action': 'decrease',
+        'success': true,
+      },
+      CabinSetting.navVolume: {
+        'before': 5,
+        'after': 5,
+        'action': 'keep',
+        'success': true,
+      },
+    });
+    expect((receipt.toJson()['items'] as Map)['navVolume']['after'], 5);
+    expect(receipt.simulated, isTrue);
+    expect(receipt.items.containsKey(CabinSetting.mediaVolume), isFalse);
+    expect(
+      () => receipt.items[CabinSetting.rearFan]!['after'] = 99,
+      throwsUnsupportedError,
+    );
+    expect(await mock.call(changes, 'items_1'), same(receipt));
+    expect(mock.executeCount, 1);
+  });
+
+  test('模擬adapter拒絕remove時逐項紀錄未執行，舊receipt可省略items', () async {
+    final mock = MockCabinActuator();
+    final rejected = await mock.call({
+      CabinSetting.rearFan: RequestedChange.remove,
+    }, 'items_bad');
+    expect(rejected.items[CabinSetting.rearFan], {
+      'before': 3,
+      'after': 3,
+      'action': 'remove',
+      'success': false,
+    });
+    expect(mock.executeCount, 0);
+    final legacy = ExecutionReceipt(success: false, message: '沒有逐項證據');
+    expect(legacy.items, isEmpty);
+    expect(legacy.toJson().containsKey('items'), isFalse);
+  });
+  test('直接差異修正失效晚到模型，未提到的待執行項保留', () async {
+    final late = Completer<IntentPatch>();
+    var calls = 0;
+    final mock = MockCabinActuator();
+    final controller = RepairController(
+      parser: (_, _) => ++calls == 1
+          ? Future.value(
+              IntentPatch(
+                changes: {
+                  CabinSetting.rearFan: RequestedChange.decrease,
+                  CabinSetting.mediaVolume: RequestedChange.decrease,
+                },
+              ),
+            )
+          : late.future,
+      actuator: mock.call,
+    );
+    addTearDown(controller.dispose);
+    await controller.newTask('初始需求');
+    final parsing = controller.revise('另一種修改');
+    expect(
+      controller.applyPatch(
+        IntentPatch(changes: {CabinSetting.rearFan: RequestedChange.remove}),
+      ),
+      isTrue,
+    );
+    late.complete(
+      IntentPatch(
+        changes: {CabinSetting.mediaVolume: RequestedChange.increase},
+      ),
+    );
+    expect(await parsing, isFalse);
+    expect(controller.snapshot.pending, {
+      CabinSetting.mediaVolume: RequestedChange.decrease,
+    });
+    expect(controller.snapshot.phase, RepairPhase.awaitingConfirmation);
+    expect(mock.executeCount, 0);
+  });
+
   group('嚴格模型輸出', () {
     test('接受完整白名單 JSON', () {
       final parsed = IntentPatch.fromModelOutput(

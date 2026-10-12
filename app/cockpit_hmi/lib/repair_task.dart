@@ -25,10 +25,15 @@ class IntentPatch {
   IntentPatch({
     required Map<CabinSetting, RequestedChange> changes,
     this.clarification,
+    this.unresolvedTextOverride,
   }) : changes = Map.unmodifiable(changes);
 
   final Map<CabinSetting, RequestedChange> changes;
   final String? clarification;
+
+  /// Internal parser metadata for a new full request that replaces an older
+  /// unresolved sentence. Never accepted as an extra model JSON field.
+  final String? unresolvedTextOverride;
 
   /// 只接受完整 JSON；不抽取 code fence，不補括號，不猜未知欄位。
   factory IntentPatch.fromModelOutput(String raw) {
@@ -113,18 +118,26 @@ class ExecutionReceipt {
     required this.message,
     this.simulated = false,
     Map<CabinSetting, int> state = const {},
-  }) : state = Map.unmodifiable(state);
+    Map<CabinSetting, Map<String, dynamic>> items = const {},
+  }) : state = Map.unmodifiable(state),
+       items = Map.unmodifiable({
+         for (final entry in items.entries)
+           entry.key: Map<String, dynamic>.unmodifiable(entry.value),
+       });
 
   final bool success;
   final String message;
   final bool simulated;
   final Map<CabinSetting, int> state;
+  final Map<CabinSetting, Map<String, dynamic>> items;
 
   Map<String, dynamic> toJson() => {
     'success': success,
     'message': message,
     'simulated': simulated,
     'state': {for (final e in state.entries) e.key.name: e.value},
+    if (items.isNotEmpty)
+      'items': {for (final entry in items.entries) entry.key.name: entry.value},
   };
 }
 
@@ -192,6 +205,11 @@ class RepairController extends ChangeNotifier {
   int _taskNumber = 0;
   int _requestNumber = 0;
   bool _disposed = false;
+  RepairSnapshot? _parseBase;
+
+  /// Optional authority gate installed by the two-seat collaboration layer.
+  /// The original single-device controller remains unchanged when absent.
+  bool Function(String taskId, int revision)? confirmationGuard;
 
   bool get _executionLocked =>
       _snapshot.phase == RepairPhase.executing ||
@@ -200,6 +218,7 @@ class RepairController extends ChangeNotifier {
   void _publish(RepairSnapshot value) {
     if (_disposed) return;
     _snapshot = value;
+    if (value.phase != RepairPhase.parsing) _parseBase = null;
     notifyListeners();
   }
 
@@ -212,7 +231,7 @@ class RepairController extends ChangeNotifier {
     return _parse(text.trim(), base);
   }
 
-  Future<bool> revise(String text) async {
+  Future<bool> revise(String text, {bool Function()? acceptanceGuard}) async {
     if (_disposed ||
         _executionLocked ||
         text.trim().isEmpty ||
@@ -228,11 +247,16 @@ class RepairController extends ChangeNotifier {
       clarification: _snapshot.clarification,
       unresolvedText: _snapshot.unresolvedText,
     );
-    return _parse(text.trim(), base);
+    return _parse(text.trim(), base, acceptanceGuard: acceptanceGuard);
   }
 
-  Future<bool> _parse(String text, RepairSnapshot base) async {
+  Future<bool> _parse(
+    String text,
+    RepairSnapshot base, {
+    bool Function()? acceptanceGuard,
+  }) async {
     final request = ++_requestNumber;
+    _parseBase = base;
     _publish(
       RepairSnapshot(
         taskId: base.taskId,
@@ -247,6 +271,10 @@ class RepairController extends ChangeNotifier {
     try {
       final patch = await _parser(text, base).timeout(parseTimeout);
       if (!current()) return false;
+      if (acceptanceGuard != null && !acceptanceGuard()) {
+        invalidatePendingParse();
+        return false;
+      }
       // 在既有任務上套差異；未提到的欄位原封不動。
       final pending = Map<CabinSetting, RequestedChange>.of(base.pending);
       for (final entry in patch.changes.entries) {
@@ -278,7 +306,7 @@ class RepairController extends ChangeNotifier {
           clarification: clarification,
           unresolvedText: clarification == null
               ? null
-              : (base.unresolvedText ?? text),
+              : (patch.unresolvedTextOverride ?? base.unresolvedText ?? text),
         ),
       );
       return true;
@@ -299,6 +327,78 @@ class RepairController extends ChangeNotifier {
       );
       return false;
     }
+  }
+
+  /// A local, authorized detail edit still uses the same merge and version
+  /// rules as model patches. It never executes the actuator.
+  bool applyPatch(IntentPatch patch) {
+    final before = _snapshot;
+    if (_disposed ||
+        _executionLocked ||
+        before.taskId == null ||
+        before.phase == RepairPhase.completed ||
+        before.phase == RepairPhase.cancelled ||
+        (patch.changes.isEmpty && patch.clarification == null)) {
+      return false;
+    }
+    ++_requestNumber;
+    final pending = Map<CabinSetting, RequestedChange>.of(before.pending);
+    for (final entry in patch.changes.entries) {
+      if (entry.value == RequestedChange.remove) {
+        pending.remove(entry.key);
+      } else {
+        pending[entry.key] = entry.value;
+      }
+    }
+    final cancelledAll =
+        before.pending.isNotEmpty &&
+        pending.isEmpty &&
+        patch.clarification == null;
+    final clarification =
+        patch.clarification ??
+        (pending.isEmpty && !cancelledAll ? '目前沒有待執行項目，請說明想調整什麼。' : null);
+    _publish(
+      RepairSnapshot(
+        taskId: before.taskId,
+        revision: before.revision + 1,
+        phase: cancelledAll
+            ? RepairPhase.cancelled
+            : (clarification == null
+                  ? RepairPhase.awaitingConfirmation
+                  : RepairPhase.awaitingClarification),
+        pending: pending,
+        clarification: clarification,
+        unresolvedText: clarification == null
+            ? null
+            : (patch.unresolvedTextOverride ?? before.unresolvedText),
+      ),
+    );
+    return true;
+  }
+
+  /// Revoking a lease invalidates an unfinished edit, not the previously
+  /// proposed task. Its revision changes so an old driver confirmation fails.
+  bool invalidatePendingParse() {
+    if (_disposed || _snapshot.phase != RepairPhase.parsing) return false;
+    final before = _snapshot;
+    final base = _parseBase ?? before;
+    ++_requestNumber;
+    _publish(
+      RepairSnapshot(
+        taskId: before.taskId,
+        revision: before.revision + 1,
+        phase: base.clarification != null
+            ? RepairPhase.awaitingClarification
+            : (base.pending.isNotEmpty
+                  ? RepairPhase.awaitingConfirmation
+                  : RepairPhase.failed),
+        pending: base.pending,
+        clarification: base.clarification,
+        unresolvedText: base.unresolvedText,
+        error: '修正授權已結束；先前需求保留，尚未執行。',
+      ),
+    );
+    return true;
   }
 
   bool cancel() {
@@ -327,7 +427,8 @@ class RepairController extends ChangeNotifier {
         before.revision != revision ||
         before.phase != RepairPhase.awaitingConfirmation ||
         before.clarification != null ||
-        before.pending.isEmpty) {
+        before.pending.isEmpty ||
+        (confirmationGuard != null && !confirmationGuard!(taskId, revision))) {
       return false;
     }
     // 在呼叫 adapter 前切換階段；連點或重送同一確認都不會再次執行。
@@ -419,10 +520,21 @@ class MockCabinActuator {
         simulated: true,
         message: '模擬控制：remove 應在待執行任務中處理，未執行。',
         state: _state,
+        items: {
+          for (final entry in changes.entries)
+            entry.key: {
+              'before': _state[entry.key],
+              'after': _state[entry.key],
+              'action': entry.value.name,
+              'success': false,
+            },
+        },
       );
     }
     executeCount++;
+    final items = <CabinSetting, Map<String, dynamic>>{};
     for (final entry in changes.entries) {
+      final before = _state[entry.key]!;
       final delta = switch (entry.value) {
         RequestedChange.decrease => -1,
         RequestedChange.increase => 1,
@@ -431,12 +543,19 @@ class MockCabinActuator {
       };
       final limit = entry.key == CabinSetting.rearFan ? 7 : 10;
       _state[entry.key] = (_state[entry.key]! + delta).clamp(0, limit).toInt();
+      items[entry.key] = {
+        'before': before,
+        'after': _state[entry.key],
+        'action': entry.value.name,
+        'success': true,
+      };
     }
     final receipt = ExecutionReceipt(
       success: true,
       simulated: true,
       message: '模擬控制已完成；未連接真實車輛。',
       state: _state,
+      items: items,
     );
     _receipts[commandId] = receipt;
     return receipt;

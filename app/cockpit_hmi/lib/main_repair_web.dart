@@ -9,6 +9,8 @@ import 'cockpit_alert_slot.dart';
 import 'cockpit_design.dart';
 import 'cockpit_instruments.dart';
 import 'protocol.dart';
+import 'repair_collaboration_widgets.dart';
+import 'repair_speech.dart';
 
 void main() {
   final b = Uri.base;
@@ -29,10 +31,11 @@ void main() {
   );
 }
 
-/// Read-only companion for a browser or native phone; it never imitates Qwen.
+/// Driver summary and explicit controls; it never performs model inference.
 class RepairMonitor extends StatefulWidget {
-  const RepairMonitor({super.key, required this.url});
+  const RepairMonitor({super.key, required this.url, this.channelFactory});
   final Uri url;
+  final WebSocketChannel Function(Uri)? channelFactory;
   @override
   State<RepairMonitor> createState() => _RepairMonitorState();
 }
@@ -40,13 +43,31 @@ class RepairMonitor extends StatefulWidget {
 class _RepairMonitorState extends State<RepairMonitor> {
   WebSocketChannel? channel;
   StreamSubscription? subscription;
-  Timer? retry, watch;
+  Timer? retry, watch, replyWatch;
   Map<String, dynamic>? status;
   DateTime? lastAt;
   bool online = false;
   int generation = 0;
-  int selectedView = 0;
+  int selectedView = 1;
   bool safetyActive = false;
+  int commandNumber = 0;
+  String? pendingCommandId, pendingAction, commandError, commandNotice;
+  String? confirmationKey;
+  DateTime? lastHeartbeatAt;
+  String? previousTaskId;
+  Map previousPending = const {};
+  Set<String> changedSettings = {};
+  final feedback = RepairSpeechFeedback();
+  bool speechBusy = false;
+  String? speechNotice;
+
+  bool get isDriver => frameFresh && status?['role'] == 'driver';
+  bool get confirmationInFlight {
+    final task = status?['task'];
+    return task is Map &&
+        task['phase'] == 'awaitingConfirmation' &&
+        confirmationKey == '${task['task_id']}:${task['revision']}';
+  }
 
   bool get frameFresh =>
       online &&
@@ -75,6 +96,13 @@ class _RepairMonitorState extends State<RepairMonitor> {
         lost();
       } else {
         setState(trackSafetyTransition);
+        if (isDriver &&
+            (lastHeartbeatAt == null ||
+                DateTime.now().difference(lastHeartbeatAt!) >=
+                    const Duration(seconds: 2))) {
+          lastHeartbeatAt = DateTime.now();
+          sendCommand('heartbeat');
+        }
       }
     });
     unawaited(connect());
@@ -91,7 +119,9 @@ class _RepairMonitorState extends State<RepairMonitor> {
     channel = null;
     WebSocketChannel? opened;
     try {
-      final ch = WebSocketChannel.connect(widget.url);
+      final ch =
+          widget.channelFactory?.call(widget.url) ??
+          WebSocketChannel.connect(widget.url);
       opened = ch;
       await ch.ready.timeout(const Duration(seconds: 4));
       if (!mounted || attempt != generation) {
@@ -105,12 +135,50 @@ class _RepairMonitorState extends State<RepairMonitor> {
             final m = jsonDecode('$raw');
             if (attempt == generation &&
                 m is Map &&
+                m['type'] == 'repair_reply') {
+              if (m['accepted'] is! bool ||
+                  m['command_id'] != pendingCommandId) {
+                return;
+              }
+              if (mounted) {
+                setState(() {
+                  final action = pendingAction;
+                  replyWatch?.cancel();
+                  pendingCommandId = null;
+                  pendingAction = null;
+                  commandError = m['accepted'] == true
+                      ? null
+                      : '${m['error'] ?? '操作未受理。'}';
+                  if (action == 'confirm' && m['accepted'] != true) {
+                    confirmationKey = null;
+                  }
+                  commandNotice = m['accepted'] == true
+                      ? switch (action) {
+                          'pair_driver' => '配對已受理；身分以最新同步為準。',
+                          'grant' => '授權已受理；乘客可修改本次需求。',
+                          'revoke' => '收回授權已受理。',
+                          'confirm' => '確認已受理，等待模擬執行回報。',
+                          'cancel' => '取消已受理；狀態以最新同步為準。',
+                          _ => null,
+                        }
+                      : null;
+                });
+              }
+              return;
+            }
+            if (attempt == generation &&
+                m is Map &&
                 m['type'] == 'repair_status' &&
                 m['schema'] == 1 &&
                 m['task'] is Map) {
               if (mounted) {
                 setState(() {
+                  if (!online && commandError == '連線中斷；恢復後請重新配對。') {
+                    commandError = null;
+                    commandNotice = '連線已恢復，請重新配對後操作。';
+                  }
                   status = Map<String, dynamic>.from(m);
+                  _capturePendingChanges();
                   lastAt = DateTime.now();
                   online = true;
                   trackSafetyTransition();
@@ -136,9 +204,26 @@ class _RepairMonitorState extends State<RepairMonitor> {
 
   void lost() {
     if (!mounted) return;
+    ++generation;
+    unawaited(subscription?.cancel());
+    _closeQuietly(channel);
+    subscription = null;
+    channel = null;
+    replyWatch?.cancel();
     setState(() {
       online = false;
       safetyActive = false;
+      status = null;
+      pendingCommandId = null;
+      pendingAction = null;
+      confirmationKey = null;
+      lastHeartbeatAt = null;
+      changedSettings = {};
+      previousTaskId = null;
+      previousPending = const {};
+      commandNotice = null;
+      commandError = '連線中斷；恢復後請重新配對。';
+      speechNotice = null;
     });
     retry?.cancel();
     retry = Timer(const Duration(seconds: 2), connect);
@@ -149,9 +234,139 @@ class _RepairMonitorState extends State<RepairMonitor> {
     ++generation;
     retry?.cancel();
     watch?.cancel();
+    replyWatch?.cancel();
     unawaited(subscription?.cancel());
     _closeQuietly(channel);
+    unawaited(feedback.stop().catchError((Object _) {}));
     super.dispose();
+  }
+
+  void _capturePendingChanges() {
+    final task = status?['task'];
+    if (task is! Map) return;
+    final next = task['pending'] is Map ? task['pending'] as Map : const {};
+    if (task['phase'] != 'awaitingConfirmation' ||
+        confirmationKey != '${task['task_id']}:${task['revision']}') {
+      confirmationKey = null;
+    }
+    if (task['task_id'] != previousTaskId) {
+      changedSettings = {};
+      commandError = null;
+      speechNotice = null;
+    } else if (task['phase'] != 'parsing') {
+      final changes = {
+        for (final setting in ['rearFan', 'mediaVolume', 'navVolume'])
+          if (previousPending[setting] != next[setting]) setting,
+      };
+      if (changes.isNotEmpty) changedSettings = changes;
+    }
+    previousTaskId = task['task_id'] is String
+        ? task['task_id'] as String
+        : null;
+    previousPending = Map.of(next);
+    if (task['phase'] == 'completed' || task['phase'] == 'cancelled') {
+      commandNotice = null;
+    }
+  }
+
+  void sendCommand(String action, {String? pairingCode}) {
+    if (!frameFresh ||
+        channel == null ||
+        (action != 'heartbeat' && pendingCommandId != null)) {
+      return;
+    }
+    if (action != 'pair_driver' && !isDriver) return;
+    if (action == 'confirm' && confirmationInFlight) return;
+    final payload = <String, dynamic>{
+      'type': 'repair_command',
+      'command_id':
+          'driver_${DateTime.now().microsecondsSinceEpoch}_${++commandNumber}',
+      'action': action,
+    };
+    if (action == 'pair_driver') {
+      if (pairingCode == null || !RegExp(r'^\d{6}$').hasMatch(pairingCode)) {
+        return;
+      }
+      payload['pairing_code'] = pairingCode;
+    } else if (action != 'heartbeat') {
+      final task = status?['task'];
+      if (task is! Map ||
+          task['task_id'] is! String ||
+          task['revision'] is! int) {
+        return;
+      }
+      if (action == 'confirm' && task['phase'] != 'awaitingConfirmation') {
+        return;
+      }
+      payload['task_id'] = task['task_id'];
+      payload['revision'] = task['revision'];
+    }
+    try {
+      if (action != 'heartbeat') {
+        setState(() {
+          pendingCommandId = payload['command_id'] as String;
+          pendingAction = action;
+          if (action == 'confirm') {
+            confirmationKey = '${payload['task_id']}:${payload['revision']}';
+          }
+          commandError = null;
+          commandNotice = '操作已送出，等待主控回覆。';
+        });
+      }
+      channel!.sink.add(jsonEncode(payload));
+      if (action != 'heartbeat') {
+        replyWatch?.cancel();
+        replyWatch = Timer(const Duration(seconds: 10), () {
+          if (!mounted || pendingCommandId != payload['command_id']) return;
+          setState(() {
+            pendingCommandId = null;
+            pendingAction = null;
+            commandNotice = null;
+            commandError = '尚未收到操作回覆；請以最新摘要為準，不會自動重送。';
+          });
+        });
+      }
+    } catch (_) {
+      lost();
+    }
+  }
+
+  String? _completedResultText() {
+    if (!frameFresh) return null;
+    final task = status?['task'];
+    if (task is! Map || task['phase'] != 'completed') return null;
+    final result = task['result'];
+    if (result is! Map ||
+        result['success'] != true ||
+        result['simulated'] != true ||
+        result['state'] is! Map) {
+      return null;
+    }
+    final state = result['state'] as Map;
+    final fan = _readLevel(state, 'rearFan', 7);
+    final music = _readLevel(state, 'mediaVolume', 10);
+    final navigation = _readLevel(state, 'navVolume', 10);
+    if (fan == null || music == null || navigation == null) return null;
+    return '模擬設定已套用。後座風量$fan，音樂音量$music，導航音量$navigation。';
+  }
+
+  Future<void> _speakResult() async {
+    final text = _completedResultText();
+    if (text == null || speechBusy) return;
+    setState(() {
+      speechBusy = true;
+      speechNotice = null;
+    });
+    try {
+      final available = await feedback.speak(text);
+      if (mounted) {
+        speechNotice = available ? '已使用本機離線語音播報模擬回報。' : '離線語音尚未就緒，請閱讀文字結果。';
+      }
+    } catch (_) {
+      if (mounted) speechNotice = '無法使用本機離線語音，請閱讀文字結果。';
+    } finally {
+      if (mounted) setState(() => speechBusy = false);
+    }
   }
 
   @override
@@ -171,58 +386,9 @@ class _RepairMonitorState extends State<RepairMonitor> {
         : result?['state'] is Map
         ? result!['state'] as Map
         : null;
-    final pending = fresh && task['pending'] is Map
-        ? task['pending'] as Map
+    final collaboration = fresh && status?['collaboration'] is Map
+        ? status!['collaboration'] as Map
         : const {};
-    final awaiting =
-        fresh &&
-        (phase == 'awaitingConfirmation' || phase == 'awaitingClarification');
-    final headline = !fresh
-        ? '等待重新連線'
-        : switch (phase) {
-            'parsing' => '正在理解需求',
-            'awaitingConfirmation' => '需求已整理',
-            'awaitingClarification' => '需要再說清楚',
-            'executing' => '正在調整座艙',
-            'completed' => '座艙調整完成',
-            'cancelled' => '這次需求已取消',
-            'failed' => '需求尚未完成',
-            'indeterminate' => '執行結果待查證',
-            _ => '等待新的需求',
-          };
-    final detail = !fresh
-        ? '舊資料已隱藏；連線恢復後自動更新。'
-        : switch (phase) {
-            'parsing' => '其餘設定會保留，理解完成後再確認。',
-            'awaitingConfirmation' => '等待乘客確認，座艙設定尚未改動。',
-            'awaitingClarification' =>
-              '${task['clarification'] ?? '請乘客在平板補充需求。'}',
-            'executing' => '等待執行回報，請稍候。',
-            'completed' => '執行回報已收到，兩個畫面保持同步。',
-            'cancelled' => '待執行項目已清除，可提出新的需求。',
-            'failed' || 'indeterminate' => '${task['error'] ?? '請在平板查看並確認。'}',
-            _ => '乘客在平板提出需求，這裡只顯示狀態。',
-          };
-    final tone =
-        !fresh ||
-            phase == 'failed' ||
-            phase == 'indeterminate' ||
-            phase == 'awaitingClarification'
-        ? CockpitStyle.amber
-        : CockpitStyle.accent;
-    final statusLabel = !fresh
-        ? '連線中斷'
-        : switch (phase) {
-            'parsing' => '理解中',
-            'awaitingConfirmation' => '待確認',
-            'awaitingClarification' => '待補充',
-            'executing' => '執行中',
-            'completed' => '已完成',
-            'cancelled' => '已取消',
-            'failed' => '未執行',
-            'indeterminate' => '待查證',
-            _ => '準備就緒',
-          };
     return Scaffold(
       backgroundColor: CockpitStyle.bg,
       body: SafeArea(
@@ -233,14 +399,20 @@ class _RepairMonitorState extends State<RepairMonitor> {
             final padding = shortLandscape
                 ? const EdgeInsets.symmetric(horizontal: 24, vertical: 14)
                 : EdgeInsets.all(wide ? 32 : 22);
-            final statusPanel = _MonitorStatus(
-              headline: headline,
-              detail: detail,
-              label: statusLabel,
-              tone: tone,
-              large: wide,
-              pending: awaiting ? pending : const {},
-              busy: fresh && (phase == 'parsing' || phase == 'executing'),
+            final statusPanel = DriverCollaborationPanel(
+              task: task,
+              collaboration: collaboration,
+              fresh: fresh,
+              driver: isDriver,
+              commandPending: pendingCommandId != null || confirmationInFlight,
+              changedSettings: changedSettings,
+              commandError: commandError,
+              commandNotice: commandNotice,
+              onPair: (code) => sendCommand('pair_driver', pairingCode: code),
+              onAction: sendCommand,
+              onSpeak: _completedResultText() == null ? null : _speakResult,
+              speechBusy: speechBusy,
+              speechNotice: speechNotice,
             );
             final viewSwitch = _MonitorViews(
               selected: selectedView,
@@ -334,7 +506,7 @@ class _RepairMonitorState extends State<RepairMonitor> {
                   ),
                   SizedBox(height: shortLandscape ? 8 : 12),
                   const Text(
-                    '行車訊號與車控均為模擬 · 第二屏只讀',
+                    '配對與授權為實作 · 行車訊號與車控為模擬',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: CockpitStyle.muted,
@@ -416,7 +588,7 @@ class _MonitorViews extends StatelessWidget {
                     ),
                   ),
                   child: Text(
-                    index == 0 ? '行車儀表' : '協作結果',
+                    index == 0 ? '行車儀表' : '需求摘要',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: selected == index
@@ -475,7 +647,7 @@ class _MonitorHeader extends StatelessWidget {
           ),
           SizedBox(height: 2),
           Text(
-            '模擬訊號',
+            '授權與最終確認',
             style: TextStyle(
               color: CockpitStyle.muted,
               fontSize: 9,
@@ -511,101 +683,6 @@ class _MonitorHeader extends StatelessWidget {
         ],
       ),
     ],
-  );
-}
-
-class _MonitorStatus extends StatelessWidget {
-  const _MonitorStatus({
-    required this.headline,
-    required this.detail,
-    required this.label,
-    required this.tone,
-    required this.large,
-    required this.pending,
-    required this.busy,
-  });
-  final String headline, detail, label;
-  final Color tone;
-  final bool large, busy;
-  final Map pending;
-
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: EdgeInsets.only(top: large ? 14 : 8, bottom: 8),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Text(
-              label,
-              style: TextStyle(
-                color: tone,
-                fontSize: 11,
-                letterSpacing: .8,
-                fontVariations: const [ui.FontVariation('wght', 500)],
-              ),
-            ),
-            const Spacer(),
-            if (busy)
-              SizedBox(
-                width: 12,
-                height: 12,
-                child: CircularProgressIndicator(strokeWidth: 1.5, color: tone),
-              ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        Text(
-          headline,
-          style: TextStyle(
-            color: CockpitStyle.text,
-            fontSize: large ? 36 : 28,
-            height: 1.3,
-            fontVariations: const [ui.FontVariation('wght', 500)],
-          ),
-        ),
-        const SizedBox(height: 12),
-        Text(
-          detail,
-          style: const TextStyle(
-            color: CockpitStyle.muted,
-            fontSize: 13,
-            height: 1.7,
-            fontVariations: [ui.FontVariation('wght', 400)],
-          ),
-        ),
-        if (pending.isNotEmpty) ...[
-          const SizedBox(height: 24),
-          const Divider(height: .5, thickness: .5, color: CockpitStyle.line),
-          const SizedBox(height: 8),
-          for (final entry in pending.entries)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Row(
-                children: [
-                  Text(
-                    _settingLabel('${entry.key}'),
-                    style: const TextStyle(
-                      color: CockpitStyle.text,
-                      fontSize: 13,
-                    ),
-                  ),
-                  const Spacer(),
-                  Text(
-                    _changeLabel('${entry.value}'),
-                    style: const TextStyle(
-                      color: CockpitStyle.accent,
-                      fontSize: 13,
-                      fontVariations: [ui.FontVariation('wght', 500)],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-        ],
-      ],
-    ),
   );
 }
 
@@ -734,18 +811,3 @@ int? _readLevel(Map? state, String name, int max) {
   final value = state?[name];
   return value is int && value >= 0 && value <= max ? value : null;
 }
-
-String _settingLabel(String setting) => switch (setting) {
-  'rearFan' => '後座風量',
-  'mediaVolume' => '音樂音量',
-  'navVolume' => '導航音量',
-  _ => '待確認設定',
-};
-
-String _changeLabel(String change) => switch (change) {
-  'decrease' => '降低一格',
-  'increase' => '提高一格',
-  'keep' => '保持不變',
-  'remove' => '取消調整',
-  _ => '待確認',
-};

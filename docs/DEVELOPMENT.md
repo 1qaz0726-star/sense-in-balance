@@ -12,7 +12,7 @@
 | Git、編輯器 | VS Code 或 Android Studio；建議 clone 到英文路徑，例如 `C:\dev\sense-in-balance` |
 | Python 3 | 只有網頁資產打包及研究工具需要；純原生新版 APK 不需要網頁打包 |
 
-Gradle wrapper 已在倉庫。確認 `flutter --version`、`flutter doctor -v`、`flutter doctor --android-licenses`，並由開發者處理 SDK 授權。當前 compile／target SDK 繼承 Flutter 預設 **36**；Android 14 模擬器是 API **34**。AGP 8.9.1 與 API 36 的相容性提示，以及比賽的 target 要求，需在正式發行前另行核對。
+Gradle wrapper 已在倉庫。確認 `flutter --version`、`flutter doctor -v`、`flutter doctor --android-licenses`，並由開發者處理 SDK 授權。當前 **compile SDK 36、target SDK 34、min SDK 24**；Android 14模擬器是API34。`android/app/build.gradle.kts`已明確設定target 34，兩個最新x64 debug APK已成功建出並以aapt確認target 34及獨立application ID。這解決V11的TargetSDK34建置項，不等於S9真機、離線語音或全部交件要求已驗證。AGP 8.9.1與compile API36的相容性提示仍需留意。
 
 ## 自動測試
 
@@ -24,7 +24,7 @@ flutter analyze
 flutter test
 ```
 
-測試涵蓋原規則／檢查器／知識庫、Hub 生命週期、WebSocket、需求版本、局部修正／澄清／取消、執行逾時、第二屏失效與安全事件優先，以及儀表繪製／幾何。模型及車控大多使用替身；通過數不能當作真模型準確率。
+2026-10-12最終完整套件88/88通過、靜態分析No issues。測試涵蓋原規則／檢查器／知識庫、Hub生命週期、WebSocket、角色配對／120秒任務授權、局部修正／澄清／取消、版本確認、逾時／斷線、執行回執，以及儀表繪製／幾何。新增回歸驗證：授權後在awaitingClarification按鈕修另一項，未回答澄清不被directPatch抹掉；driver確認被拒，文字回答後才完成一次mock執行。模型及車控大多使用替身；通過數不是模型準確率或88位受試者。[最終驗證記錄與source／APK SHA](evidence/final-validation.json)
 
 Hub 測試使用本機 8765／8767 連線埠。若展示程式或自己的 adb forward 正在占用，先暫停該展示連線再跑。Windows 中文 TEMP 路徑若造成 isolate 問題，可在目前終端機設定 `$env:TEMP='C:\tmp'`，先建立該資料夾。
 
@@ -43,11 +43,33 @@ PC 測試 application ID 是 `com.auohack.cockpit_hmi.desktopdemo`，與原作 `
 
 平板底部展示情境包含正常、停車、左右自行車／機車／汽車及 CO₂。盲點按鈕先亮方向燈，約 1 秒後顯示原事件，展示維持 10 秒。正常行車清除暫態；停車逐步降速至 0／P。警示槽一般 64 dp、短橫向 48 dp，沒有警示時也預留空間。
 
-主控示範先輸入「後座風小一點，音樂也小一點，導航提示不要變。」，再輸入「風量先不用改，其餘照剛剛。」，確認差異後才按「確認套用（模擬）」。由初始 3／5／5 變成 3／4／5，第二屏同步結果；具體成功／失敗及測試邊界見 [VALIDATION.md](VALIDATION.md)。
+示範流程如下：
+
+1. 乘客詳細平板輸入「後座風小一點，音樂也小一點，導航提示不要變。」。「帶入示範需求」只填入文字；提交仍由真Qwen提出候選，不是固定解析答案。
+2. 打開「連接駕駛屏」，讓另一螢幕輸入六位配對碼；未配對時第二屏只有觀察權。
+3. 駕駛檢查短摘要並按「授權乘客協助120秒」。
+4. 乘客帶入「只取消風量」並提交實際文字「風量先不用改，其餘照剛剛。」；真Qwen提出rearFan:remove，原音樂降低／導航keep待辦保留。一般語意修改跑模型，含糊／不支援輸入可由守門規則先澄清；逐項按鈕另可使用但不呼叫模型。
+5. 駕駛核對最新版本，按「確認套用（車控模擬）」。收到逐項ACK才完成；初始3／5／5變成3／4／5，兩屏同步結果。舊版本、收權／逾時／斷線不能復活先前修正，執行中不能重送。
+
+桌面展示的「安排一項誤解」只改尚未執行的導航提案，兩屏標示人工安排及來源，不授權也不執行。不要把示範注入寫成Qwen自然失敗率。這是方案01的角色分工，沒有完整方案02任務owner交接。證據與限制見[VALIDATION.md](VALIDATION.md)；精簡團隊審查見[方案01簡報](repair-proposal.pdf)（12頁）。
+
+最終兩target34 APK已重新建置／aapt核對、安裝並在兩AVD完成上述無注入文字流程：[乘客局部取消](evidence/native/repair-passenger-final.png)、[駕駛最新摘要](evidence/native/repair-driver-final-candidate.png)、[駕駛回執](evidence/native/repair-driver-final.png)、[乘客完成](evidence/native/repair-passenger-final-complete.png)。[兩筆真Qwen trace](evidence/native/repair-final-qwen-traces.txt)保留初始三項raw與rearFan:remove修正；[完成狀態JSON](evidence/native/repair-final-status.json)為completed、pending只剩media decrease／nav keep、模擬值3／4／5。這證明該次局部改口流程，沒有測麥克風或量測自然錯誤率。
+
+先前target36的混合文字＋按鈕、手動導航誤解展示仍保留[乘客](evidence/native/repair-passenger-revised.png)、[駕駛](evidence/native/repair-driver-revised.png)、[回執](evidence/native/repair-driver-complete.png)，該次也觀察到授權120秒到期禁止編輯、重新授權恢復。人工故障與按鈕不冒充模型輸出；機器回放又是另一種證據，不能混用人體時間或成功率。
+
+## 真模型評測與四條件回放
+
+`test_manual/repair_model_eval.dart`是明確手動啟動的PC真模型評測，排除於一般測試套件。使用`research/repair_eval_cases.json`固定公開20例；原分組仍叫development／holdout，但題目已被看過並用來調規則，不能稱獨立未見樣本。未保護13/20符合預期，保護鏈路20/20；[挑戰修正後重跑](evidence/repair-model-after-challenge-fix.json)仍20/20、14例真正模型生成＋6例確定性澄清。歷史原始輸出、規則分流與機器時間均保留於[證據包](VALIDATION.md)。
+
+[新開發者挑戰首次結果](evidence/repair-challenge-new.json)共16例，完整changes／澄清／projected pending契約10/16通過，12次真Qwen＋4次規則澄清。預期在執行前寫定並保留SHA-256，首次run未改production；但作者已讀現行程式和公開20例，仍不是獨立人類驗證或母體準確率。修正後只能稱同批已見題目的開發回歸；澄清只查存在，不驗問句品質。
+
+[最小修正後同批回歸](evidence/repair-challenge-after-fix.json)為12/16，10次真Qwen＋6次規則澄清；N06否定取消與N14不支援加熱已修，N02／N08／N09／N12仍不符合事前契約。N08改為保守澄清，因原預期是取消兩音量仍記失敗，不改答案粉飾。首次檔案與預期保持原位元；修後結果不能稱新的未見測試。
+
+`test_manual/repair_replay.dart`比較全重說、局部修正單客戶端、局部修正雙客戶端、按鈕修正；同初始值及明示注入錯誤，讀取逐項模擬回執。現存四條件數字是挑戰修正前記錄、每條件只跑一次，沒有ASR或人的閱讀／口語時間，不能算人類效率、第二屏人因優勢或S9效能。B/C模型把取消風量解成keep，由明確取消規則改為remove並保留raw；不能將保護後結果全部歸給SLM。詳見[研究與測試計畫](REPAIR_EVIDENCE_AND_TEST_PLAN.md)。
 
 ## 兩台實體 Android 平板
 
-同一 Wi-Fi，操作平板建 `lib/main_repair.dart`，第二台建 `lib/main_repair_monitor.dart`。第二屏 URL 改成 `ws://<操作平板區網 IP>:8767/repair`；`10.0.2.2` 僅適用 Android 模擬器。
+同一Wi-Fi，乘客詳細平板建`lib/main_repair.dart`，駕駛端建`lib/main_repair_monitor.dart`。駕駛URL改成`ws://<乘客平板區網IP>:8767/repair`；`10.0.2.2`僅適用Android模擬器。連上不等於取得駕駛權限，仍須六位碼配對；每次修正授權只適用目前task，最後由駕駛確認版本。
 
 操作平板未設定 `REPAIR_MODEL_URL` 時會用原 `flutter_gemma` 端上路徑，需先匯入相容 `.litertlm` 或 `.task`。PC 的 `.gguf` 不能直接交給該插件。**本次沒有驗證 S9 的端上相容性／推論速度，也沒有完成兩台實體平板的整套測試。** 第一次下載模型需要網路；本地推論與區網同步不需要持續連外，但地圖圖磚與其他外部服務要分開考慮。
 
@@ -68,6 +90,8 @@ python tool/pack_repair_web.py
 
 ## 原版與新版的責任
 
-新版以 `Hub.start(network: false)` 重用原行車模擬與規則，再由 `RepairHub` 送出需求及行車事件；不另開原 8765／8766。安全警示不等待 Qwen。第二屏除了通訊心跳，也檢查事件本身時間；過期資料隱藏數值和舊警示。
+新版以`Hub.start(network: false)`重用原行車模擬與規則，再由`RepairHub`送出需求及行車事件；不另開原8765／8766。安全警示不等待Qwen。駕駛端除了通訊心跳，也檢查事件本身時間；過期資料隱藏數值和舊警示。配對連線6秒靜默會失效，120秒修正授權不因心跳延長；恢復連線須重新配對／授權。
 
-原版地圖、問答、語音、劇本、角色流程仍於 `main.dart`／原檔。新版沒有真實 ASR、CAN、GPS、攝影機、ADAS 或自動駕駛介面。下一步應先驗證 S9／兩實機、真模型語義與可用性，再討論感測器與真實車控。
+原版地圖、問答、語音、劇本、角色流程仍於`main.dart`／原檔，原同學歷史與入口保留。新版沒有CAN、GPS、攝影機、ADAS或自動駕駛介面。
+
+新版Android ASR橋接只用`SpeechRecognizer.createOnDeviceSpeechRecognizer`，先檢查on-device服務；裝置或繁體中文語言模型不可用、權限拒絕或辨識失敗時回到文字，不改用generic recognizer／雲端。辨識文字先填入供核對，不直接送出車控。這是已實作的本地路徑，**麥克風與S9尚未實測，不能稱完成離線語音**；Android模擬器亦可能沒有可用引擎。下一步的S9／兩實體、ASR與更廣泛語意／可用性驗證仍如實標待測。
