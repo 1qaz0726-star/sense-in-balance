@@ -6,7 +6,8 @@
 # 倉庫設定 compile SDK 36、target SDK 34、min SDK 24；最終兩個 APK 已重建、aapt 核對、安裝並走完原生流程。
 # 最新 target 34 原生流程使用兩次真 Qwen 文字輸入、駕駛確認與模擬 ACK；先前 target 36 人工故障／按鈕流程另保留。
 # 模擬器流程完成不代替 S9、麥克風、兩實體斷外網或人體效益驗證。
-# 最終工程／APK／原生流程記錄與 SHA：docs/evidence/final-validation.json；隊友簡報：docs/repair-proposal.pdf。
+# 最新修訂工程／APK／原生流程與 SHA：docs/evidence/engineering-validation-20261013.json。
+# 10月12日基準保留於 docs/evidence/final-validation.json；隊友簡報：docs/repair-proposal.pdf。
 # 例：.\tools\desktop\start-demo.ps1 -SkipInstall
 # 只有需要重置 App 當前狀態時，才加上 -RestartApp。
 [CmdletBinding()]

@@ -2,6 +2,37 @@
 
 查核日：2026-10-12。範圍：隊友討論版方案 01，兩台 Android 平板、Qwen2.5-1.5B-Instruct、本地運算；**多意圖出錯後保留正確項，乘客經授權修正，駕駛只確認最終改動**。本文件是研究與預先測試計畫，不是已完成的使用者研究，也不是產品安全驗證。
 
+## 0. 2026-10-13修訂：先補現在能驗證的核心缺口
+
+外部文獻／競品的查核日期仍為2026-10-12；今天更新工程與交件，沒有重新查網路公告。後文1–14節及88/88、固定20／已見16例、原生畫面保留為10月12日基準，新修訂不能沿用舊證據當成新測量。
+
+**參賽形式已可採PC＋AVD。** 工作區V11印刷第5頁允許Android Emulator、Android Tablet或Android14以上環境／target34；第8頁的AI Box不限品牌，包含PC，亦明載不要求真AAOS硬體。第6頁最低端到端是使用者輸入或座艙資訊→AI結果→HMI視覺回饋，文字输入符合這個形式。因此先修目前可操作的方案01，不以S9端上、真麥克風或兩實體平板作本輪阻塞，也不為Hybrid加分新增雲端。
+
+今天的工程主張限於可重現的行為：
+
+1. **保留語意：**處理已見N02／N08／N09／N12。尤其「導航音量照原本安排」要保留pending；原fixture剛好nav是keep，不能掩蓋nav為increase／decrease時被keep覆蓋的缺口。全撤回與限定集合依原意判定；不確定仍澄清，不能把澄清改名成功。缺槽已唯一回答時處理多餘问句，不把所有patch＋clarification一律刪除來湊分數。
+2. **部分完成與回報：**已成功項從pending移除，保留成功回報，後續只確認／重試尚未完成項。取消剩餘待辦不等於反轉之前已完成設定。回報缺項、布林／action／值／scope或state矛盾時轉indeterminate，不能自動重送造成相對調整重做。
+3. **adapter契約：**支援partial的執行器必須提供完整、有效且一致的每項ACK；總體state可選，沒有state時由驗證過的items.after更新值。沒有items的legacy只作atomic整批相容，未提供本次新值就不以舊state／item冒充最新。這是mock介面契約，不是真車、CAN／OEM通訊或功能安全認證。
+4. **HMI清晰性：**已完成回報優先，隱藏結束任務的無效授權／確認；待澄清、執行中、未知回報與完成分清。可用程式與原生畫面驗證，不宣稱人體負擔已降低。
+5. **交付順序：**新工程測試／真模型回歸→最新APK與可操作文字流程→本地／外網邊界與一個負例→簡報、PPT／影片及第三方揭露勾稽。S9、口音／ASR、真車與人類研究留後續，不更換方案01或擴為多人任務接力。
+
+本輪實際完整工程套件108/108通過、靜態分析No issues found（14.9秒）。第一次107通過／1失敗因新UI測試未清理watch，修正test的try/finally dispose後全套重跑通過。兩APK、web release及本地打包成功；aapt確認target34、compile36、min24，最新APK已裝入兩個API34 AVD且原作／demo共存。[本輪工程／建置、模型／runtime與source／APK SHA](evidence/engineering-validation-20261013.json)保存新紀錄，不覆寫歷史。
+
+| v2已見資料 | 保護鏈路 | 真Qwen／預先澄清 | raw patch／澄清契約（僅實際呼叫） |
+|---|---|---|---|
+| [固定20例](evidence/repair-model-eval-20261013-final-v2.json) | 20/20 | 14／6 | 12/14 |
+| [同批16例](evidence/repair-challenge-20261013-final-v2.json) | 16/16 | 12／4 | 4/12 |
+
+兩批都已讀、已用於開發，不是獨立未見或人體驗證；預先澄清不計raw模型答對。16例的raw4/12與保護16/16一起報，不能說SLM獨力100%，也不能由這次規則保護推得一般自然語言已可靠。同日[v1 14/16](evidence/repair-challenge-20261013-final.json)及10月12日10/16→12/16保留原檔、原預期；本輪prompt首句改為舒適設定／不可授權確認執行，guard也改，不把變化因果歸給模型或任何單一改動。
+
+最新兩AVD已走完原生三項需求真Qwen→配對／駕駛授權→真Qwen只取消風量→最新版駕駛確認→逐項mock ACK、兩屏3／4／5。[乘客修正](evidence/native/20261013/repair-passenger-revised.png)、[駕駛候選](evidence/native/20261013/repair-driver-candidate.png)、[駕駛完成](evidence/native/20261013/repair-driver-complete.png)、[乘客完成](evidence/native/20261013/repair-passenger-complete.png)、[raw trace](evidence/native/20261013/repair-qwen-traces.jsonl)、[完成JSON](evidence/native/20261013/repair-final-status.json)可核對。兩筆raw正確且guard未調整，無人工故障／導航按鈕；這是局部改口，不能當自然錯誤修復率。駕駛完成三項值無需捲動，無效授權／確認／取消隱藏；部分失敗僅由工程測試注入，不冒稱原生已測全部負例。
+
+完成JSON的pending保留media decrease／nav keep作已確認的歷史提案，phase已completed，不能再次執行。部分失敗時的pending才只含未完成項；取消剩餘不倒轉成功項。兩者均屬mock狀態機能力，不是人體效率、實車操作或功能安全證據。
+
+[交件勾稽表](SUBMISSION_CHECKLIST.md)分開標工程證據、正式文件缺項及真機／人體未驗。本輪核心在PC本地可運作，PC及AVD均未斷外網，完整斷外網操作仍未驗，不預填加權；本文件不把有PDF簡報直接寫成全部報名內容已齊。
+
+以下為2026-10-12研究與工程基準。
+
 **最新限制：團隊目前無法安排任何一組受試者。因此本輪交付不依賴招募，使用原始文獻、第一手公開事件、同條件技術回放與明示注入展示；不追問、不招募、不把技術測例當車主。** 後文6-10節的人類研究保留為未來可選方法，現在以「5A 無受試者的交付計畫」為工作主線。
 
 **評審最有力的主張：**48人研究支持修復成本值得設計，16對研究支持乘客介面的有條件價值。最新target34兩AVD已走完真Qwen提案／局部取消、配對授權、版本確認與模擬回執。固定20例重跑20/20（14模型＋6規則）；新16例首次10/16、修後已見12/16，揭露一般化缺口。

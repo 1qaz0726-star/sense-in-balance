@@ -58,6 +58,7 @@ class _RepairMonitorState extends State<RepairMonitor> {
   Map previousPending = const {};
   Set<String> changedSettings = {};
   final feedback = RepairSpeechFeedback();
+  final summaryScroll = ScrollController();
   bool speechBusy = false;
   String? speechNotice;
 
@@ -172,6 +173,17 @@ class _RepairMonitorState extends State<RepairMonitor> {
                 m['schema'] == 1 &&
                 m['task'] is Map) {
               if (mounted) {
+                final previousTask = status?['task'];
+                final nextTask = m['task'] as Map;
+                final becameDriver =
+                    status?['role'] != 'driver' && m['role'] == 'driver';
+                final taskChanged =
+                    previousTask is Map &&
+                    previousTask['task_id'] != nextTask['task_id'];
+                final resultArrived =
+                    nextTask['phase'] == 'completed' &&
+                    (previousTask is! Map ||
+                        previousTask['phase'] != 'completed');
                 setState(() {
                   if (!online && commandError == '連線中斷；恢復後請重新配對。') {
                     commandError = null;
@@ -183,6 +195,9 @@ class _RepairMonitorState extends State<RepairMonitor> {
                   online = true;
                   trackSafetyTransition();
                 });
+                if (becameDriver || taskChanged || resultArrived) {
+                  _returnToSummaryTop();
+                }
               }
             }
           } catch (_) {
@@ -200,6 +215,14 @@ class _RepairMonitorState extends State<RepairMonitor> {
       _closeQuietly(opened);
       if (attempt == generation) lost();
     }
+  }
+
+  void _returnToSummaryTop() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && selectedView == 1 && summaryScroll.hasClients) {
+        summaryScroll.jumpTo(0);
+      }
+    });
   }
 
   void lost() {
@@ -225,6 +248,7 @@ class _RepairMonitorState extends State<RepairMonitor> {
       commandError = '連線中斷；恢復後請重新配對。';
       speechNotice = null;
     });
+    _returnToSummaryTop();
     retry?.cancel();
     retry = Timer(const Duration(seconds: 2), connect);
   }
@@ -237,6 +261,7 @@ class _RepairMonitorState extends State<RepairMonitor> {
     replyWatch?.cancel();
     unawaited(subscription?.cancel());
     _closeQuietly(channel);
+    summaryScroll.dispose();
     unawaited(feedback.stop().catchError((Object _) {}));
     super.dispose();
   }
@@ -334,15 +359,9 @@ class _RepairMonitorState extends State<RepairMonitor> {
   String? _completedResultText() {
     if (!frameFresh) return null;
     final task = status?['task'];
-    if (task is! Map || task['phase'] != 'completed') return null;
-    final result = task['result'];
-    if (result is! Map ||
-        result['success'] != true ||
-        result['simulated'] != true ||
-        result['state'] is! Map) {
-      return null;
-    }
-    final state = result['state'] as Map;
+    if (task is! Map) return null;
+    final state = completedSimulatedCabinState(task);
+    if (state == null) return null;
     final fan = _readLevel(state, 'rearFan', 7);
     final music = _readLevel(state, 'mediaVolume', 10);
     final navigation = _readLevel(state, 'navVolume', 10);
@@ -377,6 +396,7 @@ class _RepairMonitorState extends State<RepairMonitor> {
     final task = status?['task'] as Map? ?? const {};
     final result = task['result'] as Map?;
     final phase = task['phase'];
+    final completed = fresh && completedSimulatedCabinState(task) != null;
     // Once freshness is lost, neither a previous receipt nor cached cabin state
     // is presented as current. The reconnecting shell stays visible on its own.
     final cabinState = !fresh || phase == 'indeterminate'
@@ -416,7 +436,10 @@ class _RepairMonitorState extends State<RepairMonitor> {
             );
             final viewSwitch = _MonitorViews(
               selected: selectedView,
-              onSelected: (value) => setState(() => selectedView = value),
+              onSelected: (value) {
+                setState(() => selectedView = value);
+                if (value == 1) _returnToSummaryTop();
+              },
             );
             return Padding(
               padding: padding,
@@ -467,12 +490,15 @@ class _RepairMonitorState extends State<RepairMonitor> {
                                   .toDouble();
                         return SingleChildScrollView(
                           key: ValueKey('monitor_view_$selectedView'),
+                          controller: selectedView == 1 ? summaryScroll : null,
                           child: selectedView == 0
                               ? CockpitInstrumentPanel(
                                   event: cockpitEvent,
                                   fresh: cockpitFresh,
                                   height: panelHeight,
                                 )
+                              : completed
+                              ? statusPanel
                               : wide
                               ? Row(
                                   crossAxisAlignment: CrossAxisAlignment.start,

@@ -1,0 +1,194 @@
+{
+  "client_date": "2026-10-13",
+  "recorded_at_utc": "2026-10-13T01:36:09.701191+00:00",
+  "scope": "Scheme 01: typed repair of three simulated cabin comfort settings. Developer engineering validation, not a human or vehicle study.",
+  "tests": {
+    "passed": 108,
+    "total": 108,
+    "command": "flutter test --no-pub --reporter expanded",
+    "first_run": {
+      "passed": 107,
+      "failed": 1,
+      "cause": "New widget test left collaboration periodic Timer alive until addTearDown. Test-only fix disposes in try/finally before widget invariants."
+    }
+  },
+  "analysis": {
+    "result": "No issues found",
+    "elapsed_seconds": 14.9
+  },
+  "build": {
+    "flutter": "3.35.2",
+    "dart": "3.9.0",
+    "web_release": "Built build/repair_web; no-web-resources-cdn; packaged locally",
+    "apk": [
+      {
+        "filename": "tablet.apk",
+        "bytes": 306285321,
+        "sha256": "83701ca8f10587af5b03bea6a79839242e114846bc85883e0eec4baeb8920bda",
+        "badging": [
+          "package: name='com.auohack.cockpit_hmi.desktopdemo' versionCode='1' versionName='1.0.0' platformBuildVersionName='16' platformBuildVersionCode='36' compileSdkVersion='36' compileSdkVersionCodename='16'",
+          "sdkVersion:'24'",
+          "targetSdkVersion:'34'",
+          "native-code: 'arm64-v8a' 'armeabi-v7a' 'x86_64'"
+        ]
+      },
+      {
+        "filename": "phone.apk",
+        "bytes": 306220650,
+        "sha256": "1ad98b3b0560985f81c300c46a560feb78764bb9fffc15e754b52001278b8510",
+        "badging": [
+          "package: name='com.auohack.cockpit_hmi.desktopdemo' versionCode='1' versionName='1.0.0' platformBuildVersionName='16' platformBuildVersionCode='36' compileSdkVersion='36' compileSdkVersionCodename='16'",
+          "sdkVersion:'24'",
+          "targetSdkVersion:'34'",
+          "native-code: 'arm64-v8a' 'armeabi-v7a' 'x86_64'"
+        ]
+      }
+    ],
+    "canonical_pubspec_restored": true,
+    "first_attempt": "Web release succeeded; optional Python packaging failed due to Windows Store alias. Retried with real Python in this process PATH. No permanent PATH or source dependency change."
+  },
+  "model_provenance": {
+    "model_bytes": 1894532128,
+    "model_file": "qwen2.5-1.5b-instruct-q8_0.gguf",
+    "model_sha256": "d7efb072e7724d25048a4fda0a3e10b04bdef5d06b1403a1c93bd9f1240a63c8",
+    "runtime_sha256": "3e3252b5a45726459c8e22a11ef233d55e5a2581da0cc970adce3a825452c6f3",
+    "runtime_file": "llama-server.exe"
+  },
+  "production_source_sha256": [
+    {
+      "file": "app/cockpit_hmi/lib/repair_task.dart",
+      "sha256": "5a1950abfaa416e89010ac7b03fd578cd81d42de04dbcb09c48f9421c94edc0a"
+    },
+    {
+      "file": "app/cockpit_hmi/lib/repair_parser.dart",
+      "sha256": "c0a340d763075335bb4d49948a8fdce02b6d696effaa1629d025445eba8b885c"
+    },
+    {
+      "file": "app/cockpit_hmi/lib/repair_collaboration_widgets.dart",
+      "sha256": "4a45dea41fd2b8115fc47c996f0082294e1ca3ed59c9e2dce2fe15b004f7a420"
+    },
+    {
+      "file": "app/cockpit_hmi/lib/repair_screen.dart",
+      "sha256": "8b1f1132c14fbcbdee938e8d1e041dcd45a0370463e6ff7fef5590be2037f4e4"
+    },
+    {
+      "file": "app/cockpit_hmi/lib/main_repair_web.dart",
+      "sha256": "a8b1b8ee7914f82673a98f68e80f2a4deaa584989365840c8076640d0102bcad"
+    }
+  ],
+  "source_hash_note": "production_source_sha256 hashes the actual Windows working-tree bytes used for tests/build. Git can normalize CRLF. git_index_source_sha256 hashes staged canonical bytes for public source verification.",
+  "git_index_source_sha256": [
+    {
+      "file": "app/cockpit_hmi/lib/repair_task.dart",
+      "sha256": "55355ebf12402e54ab259f6d1de18cd79735b9dab0a142df594f84f24a58e4dd"
+    },
+    {
+      "file": "app/cockpit_hmi/lib/repair_parser.dart",
+      "sha256": "c0a340d763075335bb4d49948a8fdce02b6d696effaa1629d025445eba8b885c"
+    },
+    {
+      "file": "app/cockpit_hmi/lib/repair_collaboration_widgets.dart",
+      "sha256": "4a45dea41fd2b8115fc47c996f0082294e1ca3ed59c9e2dce2fe15b004f7a420"
+    },
+    {
+      "file": "app/cockpit_hmi/lib/repair_screen.dart",
+      "sha256": "270cb8b1459427936f03676dacfc8a90d00ccf1de86b72cf1d64ccadc39aa2a8"
+    },
+    {
+      "file": "app/cockpit_hmi/lib/main_repair_web.dart",
+      "sha256": "2d5a72191a63635f95044b4cd217a6309e56072c0b76d52d3b2e9cfa94ee51d2"
+    }
+  ],
+  "model_regressions": {
+    "fixed20": {
+      "file": "repair-model-eval-20261013-final-v2.json",
+      "guarded_exact": 20,
+      "total": 20,
+      "qwen_paths": 14,
+      "deterministic_only": 6,
+      "raw_exact_among_qwen_paths": 12
+    },
+    "seen16": {
+      "file": "repair-challenge-20261013-final-v2.json",
+      "guarded_exact": 16,
+      "total": 16,
+      "qwen_paths": 12,
+      "deterministic_only": 4,
+      "raw_exact_among_qwen_paths": 4,
+      "preceding_same_day_exact": 14,
+      "first_historical_exact": 10,
+      "previous_historical_exact": 12
+    },
+    "limitation": "Previously seen synthetic cases; prompt first sentence and semantic guards changed. These are guarded contract regressions, not unseen accuracy, model-only accuracy, clarification wording quality or population success."
+  },
+  "native": {
+    "result": "Completed through actual native UI on two Android emulators, without manual fault injection.",
+    "devices": [
+      {
+        "avd": "center_tab",
+        "serial": "emulator-5554",
+        "api": 34,
+        "role": "passenger and state host"
+      },
+      {
+        "avd": "dash_phone",
+        "serial": "emulator-5556",
+        "api": 34,
+        "role": "paired driver"
+      }
+    ],
+    "steps": [
+      "Passenger preset submitted to true local Qwen",
+      "Six-digit native pairing and driver authorization for this task",
+      "Passenger preset fan cancellation submitted to true local Qwen; media and navigation candidates retained",
+      "Driver tapped current confirmation once",
+      "Memory-only mock actuator returned 3/4/5; both displays showed completion"
+    ],
+    "model_calls": 2,
+    "traces": "native/20261013/repair-qwen-traces.jsonl",
+    "final_status": "native/20261013/repair-final-status.json",
+    "screenshots": [
+      "native/20261013/repair-passenger-revised.png",
+      "native/20261013/repair-driver-candidate.png",
+      "native/20261013/repair-driver-complete.png",
+      "native/20261013/repair-passenger-complete.png"
+    ],
+    "mock_final_state": {
+      "rearFan": 3,
+      "mediaVolume": 4,
+      "navVolume": 5
+    },
+    "completed_snapshot_pending": {
+      "mediaVolume": "decrease",
+      "navVolume": "keep"
+    },
+    "original_and_demo_packages_verified_on_both_devices": [
+      "com.auohack.cockpit_hmi",
+      "com.auohack.cockpit_hmi.desktopdemo"
+    ],
+    "completed_driver_values_visible_without_scroll": true,
+    "completed_driver_grant_confirm_cancel_controls_absent": true,
+    "native_partial_failure_injection_tested": false
+  },
+  "network": {
+    "pc_qwen_api": "http://127.0.0.1:8778",
+    "emulator_qwen_api": "http://10.0.2.2:8778",
+    "driver_sync": "ws://10.0.2.2:8767/repair",
+    "adb_forward": "PC tcp:8767 -> center_tab tcp:8767",
+    "host_external_network_disabled": false,
+    "guest_external_network_disabled": false,
+    "full_offline_operation_verified": false,
+    "note": "Core AI runs locally; outside Internet was not disabled. Local deployment and local trace do not establish full offline operational evidence or competition multiplier."
+  },
+  "limitations": [
+    "0 human participants: no local pain frequency, usability gain, distraction or willingness-to-pay measurement.",
+    "Qwen ran on PC GGUF Q8, not Samsung S9; no S9 thermal, memory or latency benchmark.",
+    "No microphone, on-device ASR, offline voice or TTS listening test.",
+    "No real vehicle, sensor, CAN/ADAS or safety certification. Speed, gear, blindspot and cabin state are simulated.",
+    "No two physical tablets or complete external-network-disabled workflow.",
+    "Partial/late/inconsistent ACK behavior is covered by engineering tests, not injected in this native smoke run.",
+    "Legacy receipts without items use documented atomic compatibility contract and cannot establish per-item effects.",
+    "Provided V11 used for checklist. Later official announcements, formal PPT/video and signed declarations were not completed by this code update."
+  ],
+  "historical_baseline": "final-validation.json and the 2026-10-12 evidence remain unchanged."
+}

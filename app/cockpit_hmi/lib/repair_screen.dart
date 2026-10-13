@@ -865,6 +865,7 @@ class _RepairScreenState extends State<RepairScreen> {
                     ),
                   PassengerCandidateEditor(
                     pending: task.pending,
+                    acknowledgedItems: task.result?.items ?? const {},
                     canRevise:
                         collaboration.canRevise && !busy && !speechListening,
                     changedSettings: changedSettings,

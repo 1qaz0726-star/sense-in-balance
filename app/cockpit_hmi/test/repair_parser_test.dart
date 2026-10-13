@@ -5,6 +5,202 @@ import 'package:cockpit_hmi/repair_task.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('先前安排不是實際音量keep，pending提高或降低均不得被回聲抹掉', () async {
+    for (final pendingNav in [
+      RequestedChange.increase,
+      RequestedChange.decrease,
+    ]) {
+      for (final continuity in ['照原本安排', '依照之前的計畫', '維持先前的需求']) {
+        Map<String, dynamic>? trace;
+        final parser = RepairParser(
+          (_, _) async =>
+              '{"changes":{"mediaVolume":"increase","navVolume":"keep"},"clarification":null}',
+          onTrace: (value) => trace = value,
+        );
+        final snapshot = RepairSnapshot(
+          pending: {
+            CabinSetting.mediaVolume: RequestedChange.decrease,
+            CabinSetting.navVolume: pendingNav,
+          },
+        );
+        final patch = await parser.call('音樂提高，導航音量$continuity。', snapshot);
+        expect(patch.changes, {
+          CabinSetting.mediaVolume: RequestedChange.increase,
+        });
+        expect(snapshot.pending[CabinSetting.navVolume], pendingNav);
+        expect(trace!['raw'], contains('"navVolume":"keep"'));
+        expect(
+          trace!['guard_actions'],
+          contains('pending_continuity:navVolume'),
+        );
+        expect((trace!['final_patch'] as Map)['changes'], {
+          'mediaVolume': 'increase',
+        });
+      }
+    }
+  });
+
+  test('計畫延續後明示新操作，以新的操作為準，不全域鎖住該項', () async {
+    final parser = RepairParser(
+      (_, _) async =>
+          '{"changes":{"navVolume":"increase"},"clarification":null}',
+    );
+    final patch = await parser.call(
+      '導航先照原本安排；不對，導航提高一點。',
+      RepairSnapshot(
+        pending: {CabinSetting.navVolume: RequestedChange.decrease},
+      ),
+    );
+    expect(patch.changes, {CabinSetting.navVolume: RequestedChange.increase});
+  });
+
+  test('兩音量同為已知待辦且同一取消操作，可確切展開，不改風量計畫', () async {
+    Map<String, dynamic>? trace;
+    final parser = RepairParser(
+      (_, _) async =>
+          '{"changes":{"mediaVolume":"remove","rearFan":"keep"},"clarification":null}',
+      onTrace: (value) => trace = value,
+    );
+    final snapshot = RepairSnapshot(
+      pending: {
+        CabinSetting.rearFan: RequestedChange.increase,
+        CabinSetting.mediaVolume: RequestedChange.decrease,
+        CabinSetting.navVolume: RequestedChange.increase,
+      },
+    );
+    for (final text in ['把兩個音量的待辦撤回，風量維持剛才的計畫。', '兩路音量都取消，風量照先前需求。']) {
+      final patch = await parser.call(text, snapshot);
+      expect(patch.changes, {
+        CabinSetting.mediaVolume: RequestedChange.remove,
+        CabinSetting.navVolume: RequestedChange.remove,
+      });
+      expect(patch.clarification, isNull);
+      expect(snapshot.pending[CabinSetting.rearFan], RequestedChange.increase);
+      expect(trace!['path'], 'qwen');
+      expect(
+        trace!['guard_actions'],
+        contains('explicit_pending_cancel:navVolume'),
+      );
+    }
+  });
+
+  test('全撤回同義與數量一致可交模型，否定與不符數量不得誤清全任務', () async {
+    var generations = 0;
+    final parser = RepairParser((_, _) async {
+      generations++;
+      return '{"changes":{"rearFan":"remove","mediaVolume":"remove","navVolume":"remove"},"clarification":null}';
+    });
+    final snapshot = RepairSnapshot(
+      pending: {
+        CabinSetting.rearFan: RequestedChange.decrease,
+        CabinSetting.mediaVolume: RequestedChange.decrease,
+        CabinSetting.navVolume: RequestedChange.keep,
+      },
+    );
+    for (final text in ['三件事都撤回。', '所有待辦撤掉。', '這三項都先不調。']) {
+      final patch = await parser.call(text, snapshot);
+      expect(patch.changes.values, everyElement(RequestedChange.remove));
+      expect(patch.changes.length, 3);
+      expect(patch.clarification, isNull);
+    }
+    expect(generations, 3);
+    for (final text in [
+      '別取消全部。',
+      '不要全部取消。',
+      '不是全部都撤回。',
+      '所有項目都不要撤回。',
+      '兩件都撤回。',
+      '十三件都取消。',
+    ]) {
+      final patch = await parser.call(text, snapshot);
+      expect(patch.changes, isEmpty, reason: text);
+      expect(patch.clarification, isNotEmpty, reason: text);
+    }
+    expect(generations, 3);
+    expect(snapshot.pending.length, 3);
+  });
+
+  test('否定全取消仍允許明示單項操作，不擴及其他待辦', () async {
+    final parser = RepairParser(
+      (_, _) async =>
+          '{"changes":{"rearFan":"remove","mediaVolume":"increase","navVolume":"remove"},"clarification":null}',
+    );
+    final patch = await parser.call(
+      '別取消全部，音樂提高一點。',
+      RepairSnapshot(
+        pending: {
+          CabinSetting.rearFan: RequestedChange.decrease,
+          CabinSetting.mediaVolume: RequestedChange.decrease,
+          CabinSetting.navVolume: RequestedChange.keep,
+        },
+      ),
+    );
+    expect(patch.changes, {CabinSetting.mediaVolume: RequestedChange.increase});
+  });
+
+  test('唯一取消缺槽補充不重問已知對象，raw和規則修正分開記錄', () async {
+    final pending = {
+      for (final setting in CabinSetting.values)
+        setting: RequestedChange.decrease,
+    };
+    for (final entry in {
+      '後座風量': CabinSetting.rearFan,
+      '媒體音量': CabinSetting.mediaVolume,
+      '導航提示': CabinSetting.navVolume,
+    }.entries) {
+      Map<String, dynamic>? trace;
+      final parser = RepairParser(
+        (_, _) async => jsonEncode({
+          'changes': {entry.value.name: 'remove'},
+          'clarification': '你是指這一項嗎？',
+        }),
+        onTrace: (value) => trace = value,
+      );
+      final patch = await parser.call(
+        entry.key,
+        RepairSnapshot(
+          pending: pending,
+          unresolvedText: '我想撤回其中一項。',
+          clarification: '你指的是哪個待辦？',
+        ),
+      );
+      expect(patch.changes, {entry.value: RequestedChange.remove});
+      expect(patch.clarification, isNull);
+      expect(trace!['raw'], contains('你是指這一項嗎'));
+      expect(
+        trace!['guard_actions'],
+        contains('resolved_pending_cancel_slot:${entry.value.name}'),
+      );
+      expect((trace!['final_patch'] as Map)['clarification'], isNull);
+    }
+  });
+
+  test('缺槽原句仍缺操作或要求多項時，不能刪除模型的真正問題', () async {
+    final parser = RepairParser(
+      (_, _) async =>
+          '{"changes":{"navVolume":"remove"},"clarification":"另一項是什麼？"}',
+    );
+    for (final original in ['我想改其中一項。', '那兩項先取消。', '別取消那一項。']) {
+      final patch = await parser.call(
+        '導航提示',
+        RepairSnapshot(
+          pending: {CabinSetting.navVolume: RequestedChange.keep},
+          unresolvedText: original,
+          clarification: '請補充。',
+        ),
+      );
+      expect(patch.clarification, '另一項是什麼？', reason: original);
+    }
+    final newOperation = await parser.call(
+      '導航提高',
+      RepairSnapshot(
+        pending: {CabinSetting.navVolume: RequestedChange.keep},
+        unresolvedText: '那一項先取消。',
+        clarification: '是哪一項？',
+      ),
+    );
+    expect(newOperation.clarification, '另一項是什麼？');
+  });
   test('否定取消保留原待辦，後處理不能製造remove或接受keep回聲', () async {
     final snapshot = RepairSnapshot(
       pending: {
@@ -28,6 +224,23 @@ void main() {
         RequestedChange.decrease,
       );
     }
+  });
+
+  test('物件放取消動詞前的否定仍保留該項，不被規則撤回', () async {
+    final parser = RepairParser(
+      (_, _) async =>
+          '{"changes":{"mediaVolume":"keep","rearFan":"remove"},"clarification":null}',
+    );
+    final patch = await parser.call(
+      '別把音樂取消，後座風量撤回。',
+      RepairSnapshot(
+        pending: {
+          CabinSetting.mediaVolume: RequestedChange.decrease,
+          CabinSetting.rearFan: RequestedChange.increase,
+        },
+      ),
+    );
+    expect(patch.changes, {CabinSetting.rearFan: RequestedChange.remove});
   });
 
   test('後面的明示正向取消仍處理，不把所有取消都禁用', () async {
@@ -72,7 +285,7 @@ void main() {
     expect(generations, 0);
   });
 
-  test('未具名的兩個音量先澄清，明示音樂加導航可正常解析', () async {
+  test('缺少第二個音量待辦時先澄清，明示音樂加導航可正常解析', () async {
     var generations = 0;
     final parser = RepairParser((_, _) async {
       generations++;
@@ -82,7 +295,6 @@ void main() {
       pending: {
         CabinSetting.rearFan: RequestedChange.decrease,
         CabinSetting.mediaVolume: RequestedChange.decrease,
-        CabinSetting.navVolume: RequestedChange.keep,
       },
     );
     final unclear = await parser.call('把兩個音量的待辦取消，風量維持剛才的計畫。', snapshot);
@@ -115,7 +327,7 @@ void main() {
     });
   });
 
-  test('全部取消附加局部說明也須清全部，模型漏項先澄清不偷偷留項', () async {
+  test('明示全部取消綁定完整pending，模型漏掉keep項也不能偷偷留項', () async {
     final parser = RepairParser(
       (_, _) async =>
           '{"changes":{"mediaVolume":"remove"},"clarification":null}',
@@ -128,9 +340,77 @@ void main() {
       },
     );
     final patch = await parser.call('全部取消，音樂也不用改。', snapshot);
+    expect(patch.changes, {
+      CabinSetting.rearFan: RequestedChange.remove,
+      CabinSetting.mediaVolume: RequestedChange.remove,
+      CabinSetting.navVolume: RequestedChange.remove,
+    });
+    expect(patch.clarification, isNull);
+  });
+
+  test('全撤回同句又有新操作時仍澄清，不用all覆寫矛盾提案', () async {
+    final parser = RepairParser(
+      (_, _) async =>
+          '{"changes":{"rearFan":"remove","mediaVolume":"increase"},"clarification":null}',
+    );
+    final patch = await parser.call(
+      '全部撤回，但音樂又想提高。',
+      RepairSnapshot(
+        pending: {
+          CabinSetting.rearFan: RequestedChange.decrease,
+          CabinSetting.mediaVolume: RequestedChange.decrease,
+        },
+      ),
+    );
     expect(patch.changes, isEmpty);
     expect(patch.clarification, isNotEmpty);
-    expect(patch.unresolvedTextOverride, '全部取消，音樂也不用改。');
+  });
+
+  test('已知單項操作二選一答完只清冗問，保留原raw與guard來源', () async {
+    Map<String, dynamic>? trace;
+    final parser = RepairParser(
+      (_, _) async =>
+          '{"changes":{"navVolume":"increase"},"clarification":"希望導航音量變大。"}',
+      onTrace: (value) => trace = value,
+    );
+    final patch = await parser.call(
+      '大聲一點就好。',
+      RepairSnapshot(
+        pending: {CabinSetting.navVolume: RequestedChange.keep},
+        unresolvedText: '導航提示我想調整。',
+        clarification: '希望導航音量變大還是變小？',
+      ),
+    );
+    expect(patch.changes, {CabinSetting.navVolume: RequestedChange.increase});
+    expect(patch.clarification, isNull);
+    expect(trace!['raw'], contains('希望導航音量變大'));
+    expect(
+      trace!['guard_actions'],
+      contains('resolved_operation_answer:navVolume'),
+    );
+  });
+
+  test('操作答案仍有衝突、非二選一、目標不明或model不吻合時不清真正問題', () async {
+    final parser = RepairParser(
+      (_, _) async =>
+          '{"changes":{"navVolume":"increase"},"clarification":"還需要確認。"}',
+    );
+    for (final pair in [
+      ('大聲一點但不要變。', '希望導航音量變大還是變小？', '導航提示我想調整。'),
+      ('大聲一點。', '另一項是什麼？', '導航提示我想調整。'),
+      ('大聲一點。', '你想提高还是降低？', '我想調整那個。'),
+      ('小聲一點。', '希望導航音量變大還是變小？', '導航提示我想調整。'),
+    ]) {
+      final patch = await parser.call(
+        pair.$1,
+        RepairSnapshot(
+          pending: {CabinSetting.navVolume: RequestedChange.keep},
+          clarification: pair.$2,
+          unresolvedText: pair.$3,
+        ),
+      );
+      expect(patch.clarification, isNotEmpty);
+    }
   });
 
   test('模型合法JSON偷加未提項時，不覆寫原本正確導航需求', () async {
@@ -252,7 +532,7 @@ void main() {
     var generations = 0;
     final parser = RepairParser((system, prompt) async {
       generations++;
-      expect(system, contains('不執行任何動作'));
+      expect(system, contains('不能授權、確認或執行動作'));
       expect(system, contains('unresolved_text'));
       final payload = jsonDecode(prompt) as Map;
       expect(payload['pending'], {

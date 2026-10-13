@@ -10,6 +10,378 @@ IntentPatch patch(
 }) => IntentPatch(changes: changes, clarification: clarification);
 
 void main() {
+  group('逐項回報與局部重試', () {
+    Map<String, dynamic> item(
+      int before,
+      int after,
+      RequestedChange action,
+      bool success,
+    ) => {
+      'before': before,
+      'after': after,
+      'action': action.name,
+      'success': success,
+    };
+
+    test('部分成功移出待執行，重試不再改成功項並保留兩次回報', () async {
+      var music = 5;
+      var fan = 3;
+      final executions = <Map<CabinSetting, RequestedChange>>[];
+      final controller = RepairController(
+        parser: (text, snapshot) async => IntentPatch(
+          changes: text == '需求'
+              ? {
+                  CabinSetting.mediaVolume: RequestedChange.decrease,
+                  CabinSetting.rearFan: RequestedChange.decrease,
+                }
+              : {CabinSetting.rearFan: RequestedChange.decrease},
+        ),
+        actuator: (changes, _) async {
+          executions.add(Map.of(changes));
+          if (executions.length == 1) {
+            music--;
+            return ExecutionReceipt(
+              success: false,
+              simulated: true,
+              message: '音樂完成，風量拒絕執行。',
+              state: {
+                CabinSetting.mediaVolume: music,
+                CabinSetting.rearFan: fan,
+                CabinSetting.navVolume: 5,
+              },
+              items: {
+                CabinSetting.mediaVolume: item(
+                  5,
+                  4,
+                  RequestedChange.decrease,
+                  true,
+                ),
+                CabinSetting.rearFan: item(
+                  3,
+                  3,
+                  RequestedChange.decrease,
+                  false,
+                ),
+              },
+            );
+          }
+          expect(changes.containsKey(CabinSetting.mediaVolume), isFalse);
+          fan--;
+          return ExecutionReceipt(
+            success: true,
+            simulated: true,
+            message: '剩餘風量已完成。',
+            items: {
+              CabinSetting.rearFan: item(3, 2, RequestedChange.decrease, true),
+            },
+          );
+        },
+      );
+      addTearDown(controller.dispose);
+      await controller.newTask('需求');
+      var ready = controller.snapshot;
+      expect(await controller.confirm(ready.taskId!, ready.revision), isFalse);
+      expect(controller.snapshot.phase, RepairPhase.failed);
+      expect(controller.snapshot.pending, {
+        CabinSetting.rearFan: RequestedChange.decrease,
+      });
+      expect(await controller.confirm(ready.taskId!, ready.revision), isFalse);
+      await controller.revise('只重新提出風量');
+      expect(
+        controller.snapshot.result!.items[CabinSetting.mediaVolume]!['after'],
+        4,
+      );
+      expect(controller.snapshot.result!.success, isFalse);
+      ready = controller.snapshot;
+      expect(await controller.confirm(ready.taskId!, ready.revision), isTrue);
+      expect(controller.snapshot.phase, RepairPhase.completed);
+      expect(
+        controller.snapshot.result!.items.keys,
+        containsAll([CabinSetting.mediaVolume, CabinSetting.rearFan]),
+      );
+      expect(
+        controller.snapshot.result!.items.values.every(
+          (v) => v['success'] == true,
+        ),
+        isTrue,
+      );
+      expect(music, 4);
+      expect(fan, 2);
+      expect(controller.snapshot.result!.state, {
+        CabinSetting.mediaVolume: 4,
+        CabinSetting.rearFan: 2,
+        CabinSetting.navVolume: 5,
+      });
+      expect(executions.length, 2);
+    });
+
+    test('矛盾、缺項、錯動作與不確定失敗回報阻擋重送', () async {
+      final invalidReceipts = [
+        ExecutionReceipt(
+          success: true,
+          message: '總結錯稱成功',
+          items: {
+            CabinSetting.mediaVolume: item(
+              5,
+              5,
+              RequestedChange.decrease,
+              false,
+            ),
+          },
+        ),
+        ExecutionReceipt(
+          success: true,
+          message: '缺少風量',
+          items: {
+            CabinSetting.mediaVolume: item(
+              5,
+              4,
+              RequestedChange.decrease,
+              true,
+            ),
+          },
+        ),
+        ExecutionReceipt(
+          success: false,
+          message: '失敗但數值已變',
+          items: {
+            CabinSetting.mediaVolume: item(
+              5,
+              4,
+              RequestedChange.decrease,
+              false,
+            ),
+          },
+        ),
+        ExecutionReceipt(
+          success: true,
+          message: '動作不一致',
+          items: {
+            CabinSetting.mediaVolume: item(
+              5,
+              6,
+              RequestedChange.increase,
+              true,
+            ),
+          },
+        ),
+        ExecutionReceipt(
+          success: true,
+          message: 'state與item不一致',
+          state: {CabinSetting.mediaVolume: 9},
+          items: {
+            CabinSetting.mediaVolume: item(
+              5,
+              4,
+              RequestedChange.decrease,
+              true,
+            ),
+          },
+        ),
+      ];
+      for (var index = 0; index < invalidReceipts.length; index++) {
+        var executions = 0;
+        final controller = RepairController(
+          parser: (_, _) async => IntentPatch(
+            changes: {
+              CabinSetting.mediaVolume: RequestedChange.decrease,
+              if (index == 1) CabinSetting.rearFan: RequestedChange.decrease,
+            },
+          ),
+          actuator: (_, _) async {
+            executions++;
+            return invalidReceipts[index];
+          },
+        );
+        addTearDown(controller.dispose);
+        await controller.newTask('需求');
+        final ready = controller.snapshot;
+        expect(
+          await controller.confirm(ready.taskId!, ready.revision),
+          isFalse,
+        );
+        expect(controller.snapshot.phase, RepairPhase.indeterminate);
+        expect(await controller.revise('重試'), isFalse);
+        expect(controller.cancel(), isFalse);
+        expect(await controller.newTask('新需求'), isFalse);
+        expect(executions, 1);
+      }
+    });
+
+    test('晚到的部分ACK解除未知後，只重試未完成項', () async {
+      final firstAck = Completer<ExecutionReceipt>();
+      var executions = 0;
+      final controller = RepairController(
+        parser: (text, snapshot) async => IntentPatch(
+          changes: {
+            if (text == '初始需求')
+              CabinSetting.mediaVolume: RequestedChange.decrease,
+            CabinSetting.rearFan: RequestedChange.decrease,
+          },
+        ),
+        actuator: (changes, _) {
+          if (++executions == 1) return firstAck.future;
+          expect(changes.keys, [CabinSetting.rearFan]);
+          return Future.value(
+            ExecutionReceipt(
+              success: true,
+              simulated: true,
+              message: '風量已完成',
+              items: {
+                CabinSetting.rearFan: item(
+                  3,
+                  2,
+                  RequestedChange.decrease,
+                  true,
+                ),
+              },
+            ),
+          );
+        },
+        executionTimeout: const Duration(milliseconds: 5),
+      );
+      addTearDown(controller.dispose);
+      await controller.newTask('初始需求');
+      var ready = controller.snapshot;
+      expect(await controller.confirm(ready.taskId!, ready.revision), isFalse);
+      expect(controller.snapshot.phase, RepairPhase.indeterminate);
+      expect(await controller.revise('風量重試'), isFalse);
+      firstAck.complete(
+        ExecutionReceipt(
+          success: false,
+          simulated: true,
+          message: '音樂已完成、風量未執行',
+          state: {
+            CabinSetting.mediaVolume: 4,
+            CabinSetting.rearFan: 3,
+            CabinSetting.navVolume: 5,
+          },
+          items: {
+            CabinSetting.mediaVolume: item(
+              5,
+              4,
+              RequestedChange.decrease,
+              true,
+            ),
+            CabinSetting.rearFan: item(3, 3, RequestedChange.decrease, false),
+          },
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.snapshot.phase, RepairPhase.failed);
+      expect(controller.snapshot.pending.keys, [CabinSetting.rearFan]);
+      await controller.revise('風量重試');
+      ready = controller.snapshot;
+      expect(await controller.confirm(ready.taskId!, ready.revision), isTrue);
+      expect(controller.snapshot.result!.state[CabinSetting.mediaVolume], 4);
+      expect(controller.snapshot.result!.state[CabinSetting.rearFan], 2);
+      expect(executions, 2);
+    });
+
+    test('legacy重試未回報本項新值，不把舊state或item當最新', () async {
+      var executions = 0;
+      final controller = RepairController(
+        parser: (text, _) async => IntentPatch(
+          changes: {
+            if (text == '初始需求')
+              CabinSetting.mediaVolume: RequestedChange.decrease,
+            CabinSetting.rearFan: RequestedChange.decrease,
+          },
+        ),
+        actuator: (_, _) async {
+          if (++executions == 1) {
+            return ExecutionReceipt(
+              success: false,
+              simulated: true,
+              message: '部分完成',
+              state: {
+                CabinSetting.mediaVolume: 4,
+                CabinSetting.rearFan: 3,
+                CabinSetting.navVolume: 5,
+              },
+              items: {
+                CabinSetting.mediaVolume: item(
+                  5,
+                  4,
+                  RequestedChange.decrease,
+                  true,
+                ),
+                CabinSetting.rearFan: item(
+                  3,
+                  3,
+                  RequestedChange.decrease,
+                  false,
+                ),
+              },
+            );
+          }
+          return ExecutionReceipt(
+            success: true,
+            simulated: true,
+            message: 'atomic ACK未提供數值',
+          );
+        },
+      );
+      addTearDown(controller.dispose);
+      await controller.newTask('初始需求');
+      var ready = controller.snapshot;
+      await controller.confirm(ready.taskId!, ready.revision);
+      await controller.revise('風量重試');
+      ready = controller.snapshot;
+      expect(await controller.confirm(ready.taskId!, ready.revision), isTrue);
+      expect(
+        controller.snapshot.result!.state.containsKey(CabinSetting.rearFan),
+        isFalse,
+      );
+      expect(
+        controller.snapshot.result!.items.containsKey(CabinSetting.rearFan),
+        isFalse,
+      );
+      expect(
+        controller.snapshot.result!.items[CabinSetting.mediaVolume]!['after'],
+        4,
+      );
+    });
+
+    test('取消未完成项保留已成功的回報，不表示還原設定', () async {
+      final controller = RepairController(
+        parser: (_, _) async => IntentPatch(
+          changes: {
+            CabinSetting.mediaVolume: RequestedChange.decrease,
+            CabinSetting.rearFan: RequestedChange.decrease,
+          },
+        ),
+        actuator: (_, _) async => ExecutionReceipt(
+          success: false,
+          simulated: true,
+          message: '部分已完成',
+          state: {CabinSetting.mediaVolume: 4, CabinSetting.rearFan: 3},
+          items: {
+            CabinSetting.mediaVolume: item(
+              5,
+              4,
+              RequestedChange.decrease,
+              true,
+            ),
+            CabinSetting.rearFan: item(3, 3, RequestedChange.decrease, false),
+          },
+        ),
+      );
+      addTearDown(controller.dispose);
+      await controller.newTask('需求');
+      final ready = controller.snapshot;
+      await controller.confirm(ready.taskId!, ready.revision);
+      expect(controller.cancel(), isTrue);
+      expect(controller.snapshot.phase, RepairPhase.cancelled);
+      expect(controller.snapshot.pending, isEmpty);
+      expect(controller.snapshot.result!.state[CabinSetting.mediaVolume], 4);
+      expect(
+        controller.snapshot.result!.items[CabinSetting.mediaVolume]!['success'],
+        isTrue,
+      );
+    });
+  });
+
   test('新的完整矛盾需求取代舊澄清原句，缺槽補充使用新上下文', () async {
     const oldText = '那個不用改';
     const newText = '導航音量提高，但導航音量維持原值。';

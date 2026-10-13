@@ -1,8 +1,36 @@
 # 驗證摘要
 
-更新：2026-10-12。本輪「不用重講」新增乘客詳細端、六位碼駕駛配對、120秒本task修正授權、乘客局部修改、駕駛確認最新版本、逐項ACK及去重。第二屏未配對時只讀；配對後有駕駛授權／確認權限。Qwen2.5-1.5B在PC本地執行；車速、油量、CO₂、盲點和車控仍為模擬。這是方案01的分工，不是完整任務owner交接、真車或感測器能力。
+更新：2026-10-13；下文另保留10月12日基準。「不用重講」包含乘客詳細端、六位碼駕駛配對、120秒本task修正授權、乘客局部修改、駕駛確認最新版本、逐項ACK及去重。第二屏未配對時只讀；配對後有駕駛授權／確認權限。Qwen2.5-1.5B在PC本地執行；車速、油量、CO₂、盲點和車控仍為模擬。這是方案01的分工，不是完整任務owner交接、真車或感測器能力。
 
-## 已取得的證據
+## 2026-10-13修訂與驗收：工程、語意、建置與原生流程已驗
+
+本輪維持方案01的三項設定與PC本地Qwen，新增的是原有修復／回報流程的工程修正。V11允許PC AI Box、Android14模擬器與文字輸入→AI→HMI回饋；不把S9、真語音或兩實體平板當目前原型交付的必要阻塞。
+
+| 修訂／驗收項 | 具體判定 | 狀態與不能推論的事 |
+|---|---|---|
+| 已見16例的四缺口 | 延續計畫不能改成keep；明確全撤回、限定集合與唯一缺槽回答依原預期判定。新增nav pending非keep的保留負例。 | 工程及v2已見回歸通過；原10/16、12/16、同日v1 14/16保留，不改預期，也不稱未見驗證。 |
+| 部分ACK後再確認 | 有效ACK的成功項移出pending；失敗項重試，成功項不再送；此前成功回報持續可見。 | 本輪工程測試通過；不推論真車通訊必然可靠。 |
+| 完整items／state契約 | 檢查布林、actions、值、scope；提供state時須一致，無state可由完整有效items.after更新本次值；缺項／矛盾進indeterminate，不自動重送。 | 工程負例通過；數值來自mock回報契約，不是真車或功能安全認證。 |
+| 取消剩餘待辦 | 不清除此前成功回報、不回復已完成的設定。 | 工程回歸通過；取消不是undo。 |
+| atomic舊ACK | 不帶items僅按明確atomic相容契約處理；未提供本次新值則不繼承舊state／item冒充最新。partial adapter須每項ACK。 | 相容／矛盾負例通過；不稱支援任意OEM。 |
+| 完成畫面 | 回報優先，任務結束隱藏無效操作，兩屏仍顯示模擬與最新狀態。 | UI測試與最新原生流程通過；駕駛完成三值無需捲動，授權／確認／取消隱藏。不稱已降低分心。 |
+| 可操作與本地AI證據 | 最新APK在兩API34 AVD走完文字→真Qwen→角色配對／授權／確認→mock ACK；模型trace及hash保存。 | 本輪原生無人工故障，兩筆raw符合且guard未調整；PC／AVD未斷外網，不宣稱完整Offline、两實體或語音已驗。 |
+| 建置與共存 | 兩APK重建、aapt確認target34／compile36／min24；web release及本地打包成功。 | 兩AVD已安裝，原作與demo套件共存；不是S9、AAOS／CDC移植或所有交件合規。 |
+
+本輪最終完整套件**108/108通過**，`flutter analyze` No issues found（14.9秒）。第一次全套107通過／1失敗為UI測試未清理watch，try/finally提前dispose修正測試後全套重跑通過；不是未揭露的應用程式功能修復。
+
+| v2資料 | 保護鏈路符合 | 真Qwen／預先澄清 | 原始patch＋澄清契約符合／實際Qwen呼叫 |
+|---|---|---|---|
+| [固定20例](evidence/repair-model-eval-20261013-final-v2.json) | 20/20 | 14／6 | 12/14 |
+| [已見16例](evidence/repair-challenge-20261013-final-v2.json) | 16/16 | 12／4 | 4/12 |
+
+原始契約欄位不給未呼叫模型的預先澄清加分；保護链路含前／後語意規則，不能把20/20或16/16稱模型100%。本輪prompt首句與guard同時改，不能將差異因果歸給某一项。兩批都已讀並用於開發，同日[16例v1 14/16](evidence/repair-challenge-20261013-final.json)與歷史10/16→12/16原檔保留；新16例raw4/12尤其說明規則的重要性及模型能力邊界。
+
+本輪完整流程為三項文字需求真Qwen→六位碼配對／駕駛授權→「風量先不用改，其餘照剛剛。」真Qwen→駕駛確認最新版本一次→逐項mock ACK。風量保持3、音樂5→4、導航5→5；completed快照保留media decrease／nav keep作歷史提案，不是可重試待辦。部分失敗時才把已成功項移出待辦；部分／延遲／矛盾ACK僅由工程測試覆蓋，本次原生未注入。
+
+本轮新證據均另存：[工程／建置、source／APK／模型／runtime SHA](evidence/engineering-validation-20261013.json)、[乘客取消](evidence/native/20261013/repair-passenger-revised.png)、[駕駛候選](evidence/native/20261013/repair-driver-candidate.png)、[駕駛完成](evidence/native/20261013/repair-driver-complete.png)、[乘客完成](evidence/native/20261013/repair-passenger-complete.png)、[兩筆真Qwen trace](evidence/native/20261013/repair-qwen-traces.jsonl)、[完成狀態JSON](evidence/native/20261013/repair-final-status.json)。S9效能、真麥克風、實體雙平板、車主頻率、人體負擔與安全效益依然未測；PC與AVD未斷外網，完整斷外網操作未驗，不預填Offline加權。交件狀態另見[勾稽表](SUBMISSION_CHECKLIST.md)。
+
+## 2026-10-12已取得的證據（歷史基準）
 
 | 範圍 | 實際驗證與限制 |
 |---|---|

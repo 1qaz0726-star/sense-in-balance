@@ -246,6 +246,7 @@ class RepairController extends ChangeNotifier {
       pending: _snapshot.pending,
       clarification: _snapshot.clarification,
       unresolvedText: _snapshot.unresolvedText,
+      result: _snapshot.result,
     );
     return _parse(text.trim(), base, acceptanceGuard: acceptanceGuard);
   }
@@ -265,6 +266,7 @@ class RepairController extends ChangeNotifier {
         pending: base.pending,
         clarification: base.clarification,
         unresolvedText: base.unresolvedText,
+        result: base.result,
       ),
     );
     bool current() => !_disposed && request == _requestNumber;
@@ -307,6 +309,7 @@ class RepairController extends ChangeNotifier {
           unresolvedText: clarification == null
               ? null
               : (patch.unresolvedTextOverride ?? base.unresolvedText ?? text),
+          result: base.result,
         ),
       );
       return true;
@@ -320,6 +323,7 @@ class RepairController extends ChangeNotifier {
           pending: base.pending,
           clarification: base.clarification,
           unresolvedText: base.unresolvedText,
+          result: base.result,
           error: e is TimeoutException
               ? '理解逾時，尚未執行；可以局部重說或取消。'
               : '無法可靠理解，尚未執行；可以局部重說或取消。',
@@ -371,6 +375,7 @@ class RepairController extends ChangeNotifier {
         unresolvedText: clarification == null
             ? null
             : (patch.unresolvedTextOverride ?? before.unresolvedText),
+        result: before.result,
       ),
     );
     return true;
@@ -395,6 +400,7 @@ class RepairController extends ChangeNotifier {
         pending: base.pending,
         clarification: base.clarification,
         unresolvedText: base.unresolvedText,
+        result: base.result,
         error: '修正授權已結束；先前需求保留，尚未執行。',
       ),
     );
@@ -415,6 +421,7 @@ class RepairController extends ChangeNotifier {
         taskId: _snapshot.taskId,
         revision: _snapshot.revision + 1,
         phase: RepairPhase.cancelled,
+        result: _snapshot.result,
       ),
     );
     return true;
@@ -438,6 +445,7 @@ class RepairController extends ChangeNotifier {
         revision: revision,
         phase: RepairPhase.executing,
         pending: before.pending,
+        result: before.result,
       ),
     );
     final commandId = '$taskId:$revision';
@@ -449,13 +457,65 @@ class RepairController extends ChangeNotifier {
             _snapshot.phase == RepairPhase.indeterminate);
     void acknowledge(ExecutionReceipt receipt) {
       if (!active()) return;
+      // Structured receipts must account for every requested setting. A
+      // contradictory or incomplete ACK cannot establish what really ran.
+      if (!_consistentReceipt(receipt, before.pending)) {
+        _publish(
+          RepairSnapshot(
+            taskId: taskId,
+            revision: revision,
+            phase: RepairPhase.indeterminate,
+            pending: before.pending,
+            result: before.result,
+            error: '執行回報不完整或互相矛盾；請查證，不會自動重送。',
+          ),
+        );
+        return;
+      }
+      final remaining = Map<CabinSetting, RequestedChange>.of(before.pending);
+      if (!receipt.success && receipt.items.isNotEmpty) {
+        remaining.removeWhere(
+          (setting, _) => receipt.items[setting]!['success'] == true,
+        );
+      }
+      // A retry may contain only the unexecuted settings. Retain earlier
+      // successful ACKs, but not failed settings removed from the new proposal.
+      final priorItems = before.result?.items ?? const {};
+      final finalState = <CabinSetting, int>{...?before.result?.state};
+      for (final setting in before.pending.keys) {
+        // A legacy atomic ACK without a new value cannot make an old value
+        // current. Structured item.after is already validated and authoritative.
+        if (!receipt.state.containsKey(setting) &&
+            !receipt.items.containsKey(setting)) {
+          finalState.remove(setting);
+        }
+      }
+      finalState.addAll(receipt.state);
+      for (final entry in receipt.items.entries) {
+        finalState[entry.key] = entry.value['after'] as int;
+      }
+      final combinedReceipt = ExecutionReceipt(
+        success: receipt.success,
+        message: receipt.message,
+        simulated:
+            receipt.simulated &&
+            (before.result == null || before.result!.simulated),
+        state: finalState,
+        items: {
+          for (final entry in priorItems.entries)
+            if (entry.value['success'] == true &&
+                !before.pending.containsKey(entry.key))
+              entry.key: entry.value,
+          ...receipt.items,
+        },
+      );
       _publish(
         RepairSnapshot(
           taskId: taskId,
           revision: revision,
           phase: receipt.success ? RepairPhase.completed : RepairPhase.failed,
-          pending: before.pending,
-          result: receipt,
+          pending: receipt.success ? before.pending : remaining,
+          result: combinedReceipt,
           error: receipt.success ? null : receipt.message,
         ),
       );
@@ -466,7 +526,7 @@ class RepairController extends ChangeNotifier {
       execution = _actuator(before.pending, commandId);
       final receipt = await execution.timeout(executionTimeout);
       acknowledge(receipt);
-      return receipt.success;
+      return _snapshot.phase == RepairPhase.completed;
     } catch (_) {
       if (!active()) return false;
       _publish(
@@ -475,6 +535,7 @@ class RepairController extends ChangeNotifier {
           revision: revision,
           phase: RepairPhase.indeterminate,
           pending: before.pending,
+          result: before.result,
           error: '執行回報尚未確認；不會宣稱完成或自動重送。',
         ),
       );
@@ -492,6 +553,50 @@ class RepairController extends ChangeNotifier {
     ++_requestNumber;
     super.dispose();
   }
+}
+
+/// Legacy atomic ACKs without items remain supported. Adapters that can
+/// partially execute must supply complete item receipts; failed items explicitly
+/// certify that their value did not change. Unknown effects cannot be retried.
+bool _consistentReceipt(
+  ExecutionReceipt receipt,
+  Map<CabinSetting, RequestedChange> requested,
+) {
+  if (receipt.items.isEmpty) return true;
+  if (receipt.items.length != requested.length ||
+      requested.keys.any((setting) => !receipt.items.containsKey(setting))) {
+    return false;
+  }
+  for (final entry in requested.entries) {
+    final item = receipt.items[entry.key]!;
+    final before = item['before'];
+    final after = item['after'];
+    final success = item['success'];
+    final limit = entry.key == CabinSetting.rearFan ? 7 : 10;
+    if (before is! int ||
+        after is! int ||
+        before < 0 ||
+        before > limit ||
+        after < 0 ||
+        after > limit ||
+        success is! bool ||
+        item['action'] != entry.value.name ||
+        entry.value == RequestedChange.remove ||
+        (receipt.state.containsKey(entry.key) &&
+            receipt.state[entry.key] != after)) {
+      return false;
+    }
+    final delta = switch (entry.value) {
+      RequestedChange.decrease => -1,
+      RequestedChange.increase => 1,
+      RequestedChange.keep => 0,
+      RequestedChange.remove => 0,
+    };
+    final expected = success ? (before + delta).clamp(0, limit) : before;
+    if (after != expected) return false;
+  }
+  return receipt.success ==
+      receipt.items.values.every((item) => item['success'] == true);
 }
 
 /// 僅修改記憶體，不接 CAN、真冷氣或車用音響。

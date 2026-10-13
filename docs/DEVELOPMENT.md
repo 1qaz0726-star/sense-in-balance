@@ -2,6 +2,32 @@
 
 這份指南針對新 clone；[LOCAL_DEVELOPMENT_HISTORY.md](LOCAL_DEVELOPMENT_HISTORY.md) 保留發布前本機記錄。原作完整入口和新版入口可分開建置，原始 Git 歷史保留。
 
+## 2026-10-13修訂：有限設定、可靠回報、可操作展示
+
+本輪只修方案01的既有語意／狀態／HMI缺口，不新增任務接力、控制項、雲端或市場題。V11印刷第5及8頁允許Android Emulator與PC AI Box；Android14／target34、標準Android可移植介面是目前範圍，S9端上及實體雙平板驗證留待有設備時處理。文字輸入就是有效的使用者輸入，不為本輪交付改用未驗證雲端ASR。
+
+本輪完整套件108/108通過、靜態分析No issues found（14.9秒）。第一次全套107通過／1失敗來自新UI測試未清理watch；測試以try/finally提前dispose修正後，完整重跑通過，不冒稱應用程式因此新增了功能。最新兩APK、web release及本地打包成功；aapt核對target34、compile36、min24。下文88/88與舊原生圖均屬2026-10-12，[本輪工程／建置、模型與runtime SHA](evidence/engineering-validation-20261013.json)另存。
+
+v2手動真模型回歸已保存：[固定20例](evidence/repair-model-eval-20261013-final-v2.json)保護20/20、14真Qwen＋6預先澄清、raw patch／澄清契約12/14實際呼叫符合；[同批16例](evidence/repair-challenge-20261013-final-v2.json)保護16/16、12真Qwen＋4預先澄清、raw僅4/12符合。本輪prompt首句改為有限舒適設定、不能授權／確認／執行，guard也改；因此不作單一改動的因果歸因，更不稱模型準確率100%。
+
+保留[同日v1的14/16](evidence/repair-challenge-20261013-final.json)與10月12日10/16→12/16；原預期不改，全部仍是已見開發回歸。新原始輸出／測試／APK／截圖另存日期與版本，不能以更新程式自動宣稱舊證據覆蓋新版本。
+
+本輪要驗證的回報契約：
+
+- **部分成功：**成功項移出pending，保留其成功回報；仍經駕駛確認當下版本，重試只送未完成項。取消只撤回尚未執行的項目，不把已完成設定倒轉。
+- **已完成快照：**completed的pending保留確認過的歷史提案，不能由此重新執行。只有部分失敗的剩餘pending才作下一次確認的待辦；兩種狀態不能混讀。
+- **逐項完整性：**支援部分成功的adapter必須回傳每項ACK；檢查success布林、action、前後值、項目範圍。若提供總體state，須與各項結果相符；不帶總體state時，以驗證過的items.after更新本次數值。缺項、矛盾或無法判定的回報進indeterminate，禁止自動重送，避免完成過的相對調整再次執行。
+- **舊atomic ACK：**沒有items的既有回報僅作明確的原子整批相容契約；不能拿它推論部分成功，也不稱車規／功能安全認證。legacy未提供本次項目的新值時，不沿用舊state／舊item當成最新值；未來宣稱partial的adapter必須提供逐項資料。
+- **畫面：**結果已完成就先顯示已完成項與回報；隱藏該任務失效的授權／確認操作。尚有澄清或結果未知時，不把候選當成可執行完成。
+
+最小工程驗收例：風量成功、音樂失敗後，第二次不得再送風量；缺media ACK／布林格式錯／action或state矛盾時不得重試；取消剩餘待辦後此前風量成功仍可見。這些是模擬adapter與狀態機驗收，不是人體效率或實車安全成績。
+
+兩個API34 AVD已安裝最新APK，原作與demo套件共存，並走完無故障注入的原生文字流程：三項需求真Qwen→配對／授權→真Qwen只取消風量→駕駛確認最新版本→逐項mock ACK、3／4／5。兩筆raw均符合預期、guard未調整；沒有導航按鈕或麥克風輸入。完成畫面三值無需捲動，失效的授權／確認／取消按鈕隱藏。[候選](evidence/native/20261013/repair-driver-candidate.png)、[駕駛完成](evidence/native/20261013/repair-driver-complete.png)、[完成JSON](evidence/native/20261013/repair-final-status.json)、[真Qwen trace](evidence/native/20261013/repair-qwen-traces.jsonl)可核對；部分／延遲／矛盾ACK由工程測試覆蓋，未在本次原生流程注入。
+
+交件、既有／新增與第三方元件勾稽見[SUBMISSION_CHECKLIST.md](SUBMISSION_CHECKLIST.md)。現有啟動／建置方法繼續使用；108項測試、語意v2、建置與最新原生結果已回填，正式PPT／影片／表單仍按勾稽表補齊。
+
+本輪以PC本地AI核心與可操作文字路徑交付；模型／runtime檔案、端點與真推論trace作來源證據。這次PC與AVD均未斷外網，完整斷外網操作仍未驗證，不能把localhost、Offline架構欄位或本地檔SHA單獨當成整台PC斷網證明；Offline技術加權由評審確認，不預填已獲加分。
+
 ## 環境
 
 | 工具 | 目前使用的設定 |

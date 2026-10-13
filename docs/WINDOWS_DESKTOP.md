@@ -4,6 +4,8 @@
 
 原作完整入口仍是 `app/cockpit_hmi/lib/main.dart`。本指南建置新版 `main_repair.dart` 與 `main_repair_monitor.dart`，保留原規則警示，新增局部修正需求與雙屏結果。S9 端上 LiteRT 模式是另一種配置，見 [DEVELOPMENT.md](DEVELOPMENT.md)；本指南的 x64 APK 不供 S9 安裝，也不能代表 S9 的推論速度。
 
+2026-10-13修訂：108/108工程測試及靜態分析通過。部分成功只重試剩餘項，矛盾回報待查證，完成畫面優先顯示實際模擬回報；新建置／原生證據見[本輪驗證](evidence/engineering-validation-20261013.json)。本輪已見20／16例的保護鏈路回歸為20/20、16/16，真模型原始契約分別12/14、4/12；不能稱模型100%或人體效益。下方10月12日數據是保留基準，詳見[驗證與限制](VALIDATION.md)。
+
 ## 1. 準備工具與模擬器
 
 將倉庫 clone 到英文路徑，例如 `C:\dev\sense-in-balance`。安裝 Flutter **3.35.2**（包含 Dart 3.9）、JDK **17**、Git，以及 Android Studio／Android SDK。Android建置套件依[DEVELOPMENT.md](DEVELOPMENT.md)的清單準備；目前compile SDK36、target SDK34、min SDK24。兩個最新APK已建出並經aapt確認target 34；下面的Android 14／API34則是模擬器映像，不能以它代替APK的target核對。
@@ -78,7 +80,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\desktop\build-de
 
 兩個 APK 使用獨立 application ID `com.auohack.cockpit_hmi.desktopdemo`，與原 App 分開。不同開發者的 debug 簽章可能不同；若既有 PC 測試 App 簽章不符，Android 會拒絕 `install -r`，助手不會藉由卸載原 App 解決。
 
-手機原生第二屏不需要打包網頁。若另外需要由平板提供瀏覽器第二屏，建置時加 `-PackWeb`；這會先建 `main_repair_web.dart`、執行 `tool/pack_repair_web.py`，最後還原原本的 `pubspec.yaml`。此選項需要 Python 3；產生的網頁資產留在本機忽略目錄。不要在同一次建置混入原 `pack_web.py` 的資產清單。
+手機原生第二屏不需要打包網頁。若另外需要由平板提供瀏覽器第二屏，建置時加 `-PackWeb`；這會先建 `main_repair_web.dart`、執行 `tool/pack_repair_web.py`，最後還原原本的 `pubspec.yaml`。此選項需要 Python 3；先確認 `python --version` 能執行真正的Python，Windows的Microsoft Store捷徑不算已安裝。產生的網頁資產留在本機忽略目錄。不要在同一次建置混入原 `pack_web.py` 的資產清單。
 
 ## 4. 啟動與操作
 
@@ -118,9 +120,9 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\desktop\build-de
 
 `10.0.2.2` 是 Android 模擬器的宿主機位址，不是兩台實體平板的設定。只需本地推論及同步時，不要求持續連外網；首次安裝套件及下載模型仍需網路。
 
-最終88項工程測試通過、靜態分析No issues；含按鈕修另一項仍保留未回答澄清、禁止確認、回答後mock只執行一次。公開固定20例歷史未保護解析13/20，挑戰修正後保護鏈路重跑20/20，14次真Qwen＋6次規則澄清；題目已看過並用來調守門規則，不是獨立未見測試或SLM獨力100%。新16例開發者挑戰首次10/16（12真Qwen＋4規則），修後同批已見回歸12/16（10真Qwen＋6規則），仍有4項契約缺口；預期與首次紀錄保留，不是人類／母體驗證。不能把20/20推成一般語言都能理解。現存A/B/C/D是修正前各一次機器回放，有真模型／WebSocket與模擬ACK，沒有受試者、ASR或人體效益量測。數據、失敗及raw輸出見[VALIDATION.md](VALIDATION.md)。
+10月12日歷史基準：88項工程測試通過、靜態分析No issues；含按鈕修另一項仍保留未回答澄清、禁止確認、回答後mock只執行一次。公開固定20例歷史未保護解析13/20，挑戰修正後保護鏈路重跑20/20，14次真Qwen＋6次規則澄清；題目已看過並用來調守門規則，不是獨立未見測試或SLM獨力100%。新16例開發者挑戰首次10/16（12真Qwen＋4規則），修後同批已見回歸12/16（10真Qwen＋6規則），仍有4項契約缺口；預期與首次紀錄保留，不是人類／母體驗證。不能把20/20推成一般語言都能理解。現存A/B/C/D是修正前各一次機器回放，有真模型／WebSocket與模擬ACK，沒有受試者、ASR或人體效益量測。數據、失敗及raw輸出見[VALIDATION.md](VALIDATION.md)。
 
-[最終驗證JSON](evidence/final-validation.json)統一保存工程結果、web release成功、兩APK規格、原生流程、source／APK SHA與未測限制；不把成功建置或模擬器互動當成S9實測。
+[10月12日驗證JSON](evidence/final-validation.json)統一保存工程結果、web release成功、兩APK規格、原生流程、source／APK SHA與未測限制；不把成功建置或模擬器互動當成S9實測。
 
 Android語音橋接已加入嚴格on-device ASR：裝置／繁體中文模型不支持時顯示未就緒並回文字，不切雲端。這套模擬器助手使用`-no-audio`啟動AVD，**不是麥克風／ASR測試**；S9真機、本地語音與斷外網兩實體全流程仍未驗證。程式存在不能稱完成S9離線能力。
 
@@ -128,4 +130,4 @@ Android語音橋接已加入嚴格on-device ASR：裝置／繁體中文模型不
 
 CMD 與上述建置範例的 `ExecutionPolicy Bypass` 只作用在本次 PowerShell 程序，不呼叫 `Set-ExecutionPolicy`，不改永久 PATH 或 registry。建置助手在結束時還原目前工作目錄及暫時設定的環境變數。
 
-通用建置助手已在這台電腦真正執行，從基礎資產清單建出兩個 APK；Doctor 路徑核對也已實際執行，確認使用指定 SDK 與 JDK。通用模型啟動助手已實測沿用既有本地服務分支，精確 alias 檢查成功，未另啟第二個模型程序。通用 `start-demo` 目前完成語法檢查與程式審閱；先前本機助手曾完成真 Qwen 與雙模擬器互動實測。仍未在第二台乾淨 Windows 電腦完整安裝驗證，不能把同機實測當成所有電腦都已支援。
+通用建置助手已在這台電腦真正執行，從基礎資產清單建出兩個 APK；Doctor 路徑核對也已實際執行，確認使用指定 SDK 與 JDK。通用模型啟動助手已實測沿用既有本地服務分支，精確 alias 檢查成功，未另啟第二個模型程序。2026-10-13亦以通用 `start-demo -RestartApp` 實際完成既有模型重用、啟動兩AVD、install -r、新版App啟動及Hub橋接，再由原生UI走完兩次真Qwen與駕駛確認。仍未在第二台乾淨 Windows 電腦完整安裝驗證，不能把同機實測當成所有電腦都已支援。
