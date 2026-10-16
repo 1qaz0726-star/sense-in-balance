@@ -18,6 +18,7 @@ import 'repair_task.dart';
 import 'repair_speech.dart';
 import 'setup.dart';
 import 'slm.dart';
+import 'voice.dart';
 
 class RepairScreen extends StatefulWidget {
   const RepairScreen({super.key});
@@ -74,17 +75,20 @@ class _RepairScreenState extends State<RepairScreen> {
       cockpit.clearDemoEvents();
       unawaited(cockpit.start(network: false));
     }
+    // 2026-10-13：接回原作的車內語音（安全警示、換氣告知），與原「中控」模式同一套 TTS。
+    cockpit.onSpeak = (t, urgent) => Voice.I.say(t, urgent: urgent);
+    unawaited(Voice.I.init());
     cockpitWatch = Timer.periodic(const Duration(seconds: 1), (_) {
       final fresh = cockpitFresh;
       if (mounted && fresh != lastFresh) setState(() => lastFresh = fresh);
     });
     controller = RepairController(
-      parseTimeout: Duration(seconds: remoteModel == null ? 15 : 30),
+      parseTimeout: Duration(seconds: remoteModel == null ? 60 : 30),
       parser: RepairParser(
         (system, prompt) {
           if (!modelReady) return Future.error(StateError('請先準備模型'));
           return remoteModel?.generate(system, prompt) ??
-              Slm.I.generate(system, prompt);
+              Slm.I.generate(system, prompt, timeout: const Duration(seconds: 55));
         },
         onTrace: const bool.fromEnvironment('REPAIR_EVAL_LOG')
             ? (trace) => debugPrint(
@@ -140,6 +144,7 @@ class _RepairScreenState extends State<RepairScreen> {
   @override
   void dispose() {
     cockpitWatch?.cancel();
+    cockpit.onSpeak = null;
     unawaited(hub.stop());
     if (ownsCockpit) unawaited(cockpit.stop());
     controller.removeListener(_capturePendingChanges);
