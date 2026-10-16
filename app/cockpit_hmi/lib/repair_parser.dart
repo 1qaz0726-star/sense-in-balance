@@ -4,11 +4,38 @@ import 'repair_task.dart';
 
 typedef ModelGeneration = Future<String> Function(String system, String prompt);
 
+/// Hybrid AI 的雲端增強（Offline First、Cloud Enhanced）。
+///
+/// 只在一種情況介入：守門程式因為「沒有點名任何一項設定」準備反問，而且此刻連得上網。
+/// 雲端可以依明確的舒適目標推論出項目，結果照樣經過同一套守門與駕駛確認；
+/// 不支援的控制、安全相關要求、兩音量指代不明等其他反問，一律不送雲端。
+/// 離線、逾時或雲端輸出不合格時，退回原本的本地反問，行為與未啟用時完全相同。
+class CloudAssist {
+  CloudAssist({
+    required this.generate,
+    required this.isOnline,
+    this.timeout = const Duration(seconds: 6),
+    this.onLesson,
+  });
+  final ModelGeneration generate;
+  final Future<bool> Function() isOnline;
+  final Duration timeout;
+
+  /// 雲端成功解讀一句時呼叫，內容可留作下一輪蒸餾的教材（只含文字與 JSON）。
+  final void Function(Map<String, dynamic> lesson)? onLesson;
+}
+
 /// Accepts reviewed text, whether typed or supplied by an ASR front end.
 class RepairParser {
-  RepairParser(this.generate, {this.onTrace, this.semanticGuard = true});
+  RepairParser(
+    this.generate, {
+    this.onTrace,
+    this.semanticGuard = true,
+    this.cloud,
+  });
   final ModelGeneration generate;
   final bool semanticGuard;
+  final CloudAssist? cloud;
 
   /// Optional local diagnostics for a device evaluation; absent in normal use.
   final void Function(Map<String, dynamic>)? onTrace;
@@ -27,24 +54,35 @@ class RepairParser {
     String? error;
     IntentPatch? finalPatch;
     final guardActions = <String>[];
+    var path = 'qwen';
     try {
       final guarded = semanticGuard
           ? _clarifyBeforeGeneration(text, snapshot)
           : null;
+      IntentPatch? patch;
       if (guarded != null) {
-        onTrace?.call({
-          'input': payload,
-          'raw': null,
-          'path': 'deterministic_clarification',
-          'elapsed_ms': watch.elapsedMilliseconds,
-          'error': null,
-          'guard_actions': ['clarify_before_generation'],
-          'final_patch': _tracePatch(guarded),
-        });
-        return guarded;
+        final cloudPatch = await _tryCloud(text, snapshot, payload);
+        if (cloudPatch == null) {
+          onTrace?.call({
+            'input': payload,
+            'raw': null,
+            'path': 'deterministic_clarification',
+            'elapsed_ms': watch.elapsedMilliseconds,
+            'error': null,
+            'guard_actions': ['clarify_before_generation'],
+            'final_patch': _tracePatch(guarded),
+          });
+          return guarded;
+        }
+        path = 'cloud';
+        raw = cloudPatch.$1;
+        patch = cloudPatch.$2;
+        guardActions.add('cloud_assist');
+      } else {
+        raw = await generate(kRepairSystemPrompt, jsonEncode(payload));
+        patch = IntentPatch.fromModelOutput(raw);
       }
-      raw = await generate(kRepairSystemPrompt, jsonEncode(payload));
-      final patch = IntentPatch.fromModelOutput(raw);
+      final source = path == 'cloud' ? 'cloud' : 'local';
       if (!semanticGuard) {
         finalPatch = patch;
         return patch;
@@ -121,6 +159,7 @@ class RepairParser {
           changes: const {},
           clarification: '你要取消全部待執行變更，還是修改其中一項？',
           unresolvedTextOverride: text,
+          source: source,
         );
       }
       var clarification = patch.clarification;
@@ -151,20 +190,32 @@ class RepairParser {
           changes: const {},
           clarification: '你想修改哪一項？其餘待執行需求會保留。',
           unresolvedTextOverride: text,
+          source: source,
         );
       }
-      return finalPatch = IntentPatch(
+      finalPatch = IntentPatch(
         changes: changes,
         clarification: clarification,
+        // 雲端也沒點名項目而反問時，保留原句，讓下一輪回答能接上。
         unresolvedTextOverride:
             clarification != null &&
-                _operationWords.hasMatch(text) &&
-                _settingWords.values.any(
-                  (words) => RegExp(words).hasMatch(text),
-                )
+                (source == 'cloud' ||
+                    (_operationWords.hasMatch(text) &&
+                        _settingWords.values.any(
+                          (words) => RegExp(words).hasMatch(text),
+                        )))
             ? text
             : null,
+        source: source,
       );
+      if (source == 'cloud' && changes.isNotEmpty) {
+        cloud?.onLesson?.call({
+          'input': payload,
+          'teacher_raw': raw,
+          'final_patch': _tracePatch(finalPatch),
+        });
+      }
+      return finalPatch;
     } catch (e) {
       error = e.runtimeType.toString();
       rethrow;
@@ -173,13 +224,33 @@ class RepairParser {
         onTrace?.call({
           'input': payload,
           'raw': raw,
-          'path': 'qwen',
+          'path': path,
           'elapsed_ms': watch.elapsedMilliseconds,
           'error': error,
           'guard_actions': guardActions,
           'final_patch': finalPatch == null ? null : _tracePatch(finalPatch),
         });
       }
+    }
+  }
+
+  /// 只處理「沒點名項目」的反問；其餘一律回 null，維持本地行為。
+  Future<(String, IntentPatch)?> _tryCloud(
+    String text,
+    RepairSnapshot snapshot,
+    Map<String, dynamic> payload,
+  ) async {
+    final assist = cloud;
+    if (assist == null || !_cloudEligible(text, snapshot)) return null;
+    try {
+      if (!await assist.isOnline()) return null;
+      final raw = await assist
+          .generate(kCloudRepairSystemPrompt, jsonEncode(payload))
+          .timeout(assist.timeout);
+      return (raw, IntentPatch.fromModelOutput(raw));
+    } catch (_) {
+      // 逾時、斷線、格式不合：不冒險，回到本地反問。
+      return null;
     }
   }
 }
@@ -461,3 +532,19 @@ changes 只能有 rearFan（後座風量）、mediaVolume（音樂音量）、na
 {"changes":{},"clarification":"你是指風量、音樂，還是導航提示？"}
 例：unresolved_text 是「那個不要改」，clarification 問要取消哪一項，user_text 回答「音樂」。
 {"changes":{"mediaVolume":"remove"},"clarification":null}''';
+
+/// 雲端只接「沒點名任何項目」的句子；不支援的控制、兩音量指代、全部取消都不送。
+bool _cloudEligible(String text, RepairSnapshot snapshot) =>
+    !RegExp(r'車窗|车窗|車門|车门|方向盤|方向盘|煞車|刹车|油門|油门').hasMatch(text) &&
+    !_unsupportedSeatOrTemperature.hasMatch(text) &&
+    !_aggregateVolumeReference.hasMatch(text) &&
+    !_isCancelAll(text, snapshot) &&
+    _referencedSettings(text, snapshot).isEmpty;
+
+/// 雲端用的提示：與端側相同的 JSON 契約，多一條「可依舒適目標推論」。
+const kCloudRepairSystemPrompt = '''$kRepairSystemPrompt
+你是連網時的雲端輔助。使用者這句沒有點名項目，但可能說出了明確的舒適目標。
+只有在目標能明確對應到上述三項時才推論，例如：想睡覺、要講電話、聽不清楚導航、後座太冷或太悶。
+如果同樣合理的項目不只一個（例如只說「小聲一點」，可能是音樂也可能是導航），changes 為空並反問。
+與座艙舒適無關、不支援的控制、安全相關要求（警示、駕駛行為），changes 為空並用一句繁體中文說明。
+你的結果只是提案，會交給駕駛確認後才執行。''';

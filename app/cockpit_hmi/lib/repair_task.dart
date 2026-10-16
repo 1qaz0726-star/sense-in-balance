@@ -26,6 +26,7 @@ class IntentPatch {
     required Map<CabinSetting, RequestedChange> changes,
     this.clarification,
     this.unresolvedTextOverride,
+    this.source = 'local',
   }) : changes = Map.unmodifiable(changes);
 
   final Map<CabinSetting, RequestedChange> changes;
@@ -34,6 +35,10 @@ class IntentPatch {
   /// Internal parser metadata for a new full request that replaces an older
   /// unresolved sentence. Never accepted as an extra model JSON field.
   final String? unresolvedTextOverride;
+
+  /// 這次修正由誰提出：'local'（端側模型或規則）或 'cloud'（連網時的雲端解讀）。
+  /// 只供畫面照實標示，不是模型 JSON 欄位，也不改變確認流程。
+  final String source;
 
   /// 只接受完整 JSON；不抽取 code fence，不補括號，不猜未知欄位。
   factory IntentPatch.fromModelOutput(String raw) {
@@ -151,6 +156,7 @@ class RepairSnapshot {
     String? unresolvedText,
     this.result,
     this.error,
+    this.patchSource,
   }) : pending = Map.unmodifiable(pending),
        unresolvedText = unresolvedText == null
            ? null
@@ -167,6 +173,9 @@ class RepairSnapshot {
   final ExecutionReceipt? result;
   final String? error;
 
+  /// 最近一次解析結果的來源（'local'／'cloud'）；只在解析剛完成的快照上有值。
+  final String? patchSource;
+
   Map<String, dynamic> toJson() => {
     'task_id': taskId,
     'revision': revision,
@@ -176,6 +185,7 @@ class RepairSnapshot {
     'unresolved_text': unresolvedText,
     'result': result?.toJson(),
     'error': error,
+    if (patchSource != null) 'patch_source': patchSource,
   };
 }
 
@@ -310,6 +320,7 @@ class RepairController extends ChangeNotifier {
               ? null
               : (patch.unresolvedTextOverride ?? base.unresolvedText ?? text),
           result: base.result,
+          patchSource: patch.source,
         ),
       );
       return true;

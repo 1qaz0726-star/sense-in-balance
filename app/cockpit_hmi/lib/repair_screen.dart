@@ -12,6 +12,7 @@ import 'protocol.dart';
 import 'repair_hub.dart';
 import 'repair_collaboration.dart';
 import 'repair_collaboration_widgets.dart';
+import 'repair_cloud_model.dart';
 import 'repair_parser.dart';
 import 'repair_remote_model.dart';
 import 'repair_task.dart';
@@ -48,6 +49,12 @@ class _RepairScreenState extends State<RepairScreen> {
   Map<CabinSetting, RequestedChange> previousPending = const {};
   Set<CabinSetting> changedSettings = {};
 
+  /// Hybrid AI：有建置金鑰才有雲端；沒有金鑰就是純離線版。
+  late final CloudAssist? cloudAssist;
+  bool cloudOnline = false;
+  int cloudLessons = 0;
+  Timer? cloudWatch;
+
   bool get modelReady => remoteModel?.ready ?? Slm.I.ready;
   String get modelStatus => remoteModel?.status ?? modelStatusText(Slm.I);
 
@@ -82,6 +89,25 @@ class _RepairScreenState extends State<RepairScreen> {
       final fresh = cockpitFresh;
       if (mounted && fresh != lastFresh) setState(() => lastFresh = fresh);
     });
+    cloudAssist = cloudAssistFromEnvironment(
+      onLesson: (_) {
+        if (mounted) setState(() => cloudLessons++);
+      },
+    );
+    if (cloudAssist != null) {
+      Future<void> probe() async {
+        final online = await cloudReachable();
+        if (mounted && online != cloudOnline) {
+          setState(() => cloudOnline = online);
+        }
+      }
+
+      unawaited(probe());
+      cloudWatch = Timer.periodic(
+        const Duration(seconds: 3),
+        (_) => unawaited(probe()),
+      );
+    }
     controller = RepairController(
       parseTimeout: Duration(seconds: remoteModel == null ? 60 : 30),
       parser: RepairParser(
@@ -95,6 +121,7 @@ class _RepairScreenState extends State<RepairScreen> {
                 'REPAIR_EVAL ${jsonEncode({...trace, 'backend': remoteModel == null ? Slm.I.backend : 'PC GGUF Q8'})}',
               )
             : null,
+        cloud: cloudAssist,
       ).call,
       actuator: actuator.call,
     );
@@ -144,6 +171,7 @@ class _RepairScreenState extends State<RepairScreen> {
   @override
   void dispose() {
     cockpitWatch?.cancel();
+    cloudWatch?.cancel();
     cockpit.onSpeak = null;
     unawaited(hub.stop());
     if (ownsCockpit) unawaited(cockpit.stop());
@@ -456,6 +484,10 @@ class _RepairScreenState extends State<RepairScreen> {
             modelReady ? '本地 AI 就緒' : 'AI 準備中',
             style: cockpitText(12, color: CockpitStyle.muted),
           ),
+          if (cloudAssist != null) ...[
+            const SizedBox(width: 12),
+            _cloudStatus(),
+          ],
           const SizedBox(width: 24),
         ],
         const CockpitClock(),
@@ -470,6 +502,31 @@ class _RepairScreenState extends State<RepairScreen> {
           ),
       ],
     ),
+  );
+
+  /// 頂部列的雲端狀態：連網時亮、離線時灰；連帶顯示本次累積的雲端教材數。
+  Widget _cloudStatus() => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Container(
+        width: 7,
+        height: 7,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: cloudOnline ? CockpitStyle.accent : CockpitStyle.muted,
+        ),
+      ),
+      const SizedBox(width: 6),
+      Text(
+        cloudOnline
+            ? '雲端增強可用${cloudLessons > 0 ? '・教材 $cloudLessons 筆' : ''}'
+            : '離線・本地運作',
+        style: cockpitText(
+          12,
+          color: cloudOnline ? CockpitStyle.accent : CockpitStyle.muted,
+        ),
+      ),
+    ],
   );
 
   Widget _viewPicker() => Row(
@@ -833,6 +890,15 @@ class _RepairScreenState extends State<RepairScreen> {
                     weight: FontWeight.w500,
                   ),
                 ),
+                if (task.patchSource == 'cloud') ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    task.clarification == null
+                        ? '雲端解讀（連網增強）・仍需駕駛確認'
+                        : '雲端也無法確定，請補充一項',
+                    style: cockpitText(13, color: CockpitStyle.accent),
+                  ),
+                ],
                 if (demoFault is Map) ...[
                   const SizedBox(height: 10),
                   DemoFaultNotice(fault: demoFault),
