@@ -15,6 +15,7 @@ import 'package:flutter/foundation.dart';
 
 import 'guard.dart';
 import 'kb.dart';
+import 'repair_cloud_model.dart';
 import 'protocol.dart';
 import 'rules.dart';
 import 'slm.dart';
@@ -394,18 +395,31 @@ class Hub extends ChangeNotifier {
     final eventGeneration = _eventGeneration;
     final online = await hasInternet();
     if (!_active(generation) || eventGeneration != _eventGeneration) return;
-    final (answer, hit) = lookup(q);
+    var (answer, hit) = lookup(q);
+    var src = 'kb';
+    // Hybrid：本地知識庫查不到、而且連得上網，才請雲端回答一般或旅途問題。
+    // 這台車的功能、警示燈、保養維修，雲端也只回「請查車主手冊」，不拿網路說明亂答。
+    if (!hit && online) {
+      final cloud = await cloudKnowledgeAnswer(q);
+      if (!_active(generation) || eventGeneration != _eventGeneration) return;
+      if (cloud != null) {
+        answer = cloud;
+        src = 'cloud';
+      }
+    }
     _queryState = {'question': q, 'online': online, 'speed': speed};
     _queryDecision = Decision(
       action: answer,
       urgency: Urgency.reply,
-      reason: hit ? '本地知識庫檢索' : '本地知識庫查無資料',
+      reason: hit ? '本地知識庫檢索' : (src == 'cloud' ? '雲端增強回答' : '本地知識庫查無資料'),
     );
     _queryUtt = _Utterance(_queryDecision!.key)
       ..text = answer
-      ..src = 'kb';
+      ..src = src;
     _replyUntil = DateTime.now().add(const Duration(seconds: 12));
-    _note('提問「$q」→ ${hit ? '知識庫命中' : '查無資料'}（${online ? '有網路' : '離線'}）');
+    _note(
+      '提問「$q」→ ${hit ? '知識庫命中' : (src == 'cloud' ? '雲端回答' : '查無資料')}（${online ? '有網路' : '離線'}）',
+    );
     _step(sim: false);
   }
 

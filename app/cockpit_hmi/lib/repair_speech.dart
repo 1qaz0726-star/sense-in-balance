@@ -49,6 +49,44 @@ class RepairSpeechInput {
     }
   }
 
+  /// Android 13+：查繁中離線語言包，沒裝就請系統下載。回傳 installed／downloading／unsupported／unavailable。
+  Future<String> prepareLanguage({String language = 'zh-TW'}) async {
+    if (_disposed ||
+        kIsWeb ||
+        defaultTargetPlatform != TargetPlatform.android) {
+      return 'unavailable';
+    }
+    final result = await channel.invokeMapMethod<String, dynamic>(
+      'prepareLanguage',
+      {'language': language},
+    );
+    return '${result?['status'] ?? 'unavailable'}';
+  }
+
+  /// 連網時的雲端辨識用：錄一段 16kHz 單聲道 AAC，第二次呼叫 [stopRecording] 取回位元組。
+  Future<void> startRecording() async {
+    if (_busy) throw StateError('語音輸入仍在進行。');
+    _busy = true;
+    try {
+      await channel.invokeMethod<bool>('recordStart');
+    } catch (_) {
+      _busy = false;
+      rethrow;
+    }
+  }
+
+  Future<Uint8List> stopRecording() async {
+    try {
+      final bytes = await channel.invokeMethod<Uint8List>('recordStop');
+      if (bytes == null || bytes.isEmpty) {
+        throw const FormatException('錄音是空的，請再說一次。');
+      }
+      return bytes;
+    } finally {
+      _busy = false;
+    }
+  }
+
   Future<void> cancel() async {
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
       await channel.invokeMethod<void>('cancel');

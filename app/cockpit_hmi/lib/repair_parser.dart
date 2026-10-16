@@ -32,10 +32,14 @@ class RepairParser {
     this.onTrace,
     this.semanticGuard = true,
     this.cloud,
+    this.recall,
   });
   final ModelGeneration generate;
   final bool semanticGuard;
   final CloudAssist? cloud;
+
+  /// 車主記憶：駕駛確認過的「這句話 → 這組調整」。離線也查得到；命中仍只是候選。
+  final Map<CabinSetting, RequestedChange>? Function(String text)? recall;
 
   /// Optional local diagnostics for a device evaluation; absent in normal use.
   final void Function(Map<String, dynamic>)? onTrace;
@@ -61,6 +65,22 @@ class RepairParser {
           : null;
       IntentPatch? patch;
       if (guarded != null) {
+        final remembered = _cloudEligible(text, snapshot)
+            ? recall?.call(text)
+            : null;
+        if (remembered != null && remembered.isNotEmpty) {
+          finalPatch = IntentPatch(changes: remembered, source: 'memory');
+          onTrace?.call({
+            'input': payload,
+            'raw': null,
+            'path': 'owner_memory',
+            'elapsed_ms': watch.elapsedMilliseconds,
+            'error': null,
+            'guard_actions': ['owner_memory_recall'],
+            'final_patch': _tracePatch(finalPatch),
+          });
+          return finalPatch;
+        }
         final cloudPatch = await _tryCloud(text, snapshot, payload);
         if (cloudPatch == null) {
           onTrace?.call({

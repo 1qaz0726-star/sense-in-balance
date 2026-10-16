@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
 
 import 'cockpit_design.dart';
 import 'cockpit_alert_slot.dart';
@@ -13,6 +15,8 @@ import 'repair_hub.dart';
 import 'repair_collaboration.dart';
 import 'repair_collaboration_widgets.dart';
 import 'repair_cloud_model.dart';
+import 'repair_cloud_speech.dart';
+import 'owner_memory.dart';
 import 'repair_parser.dart';
 import 'repair_remote_model.dart';
 import 'repair_task.dart';
@@ -51,9 +55,26 @@ class _RepairScreenState extends State<RepairScreen> {
 
   /// Hybrid AI：有建置金鑰才有雲端；沒有金鑰就是純離線版。
   late final CloudAssist? cloudAssist;
-  bool cloudOnline = false;
+  final cloudLink = CloudLink();
+  bool get cloudOnline => cloudLink.online;
   int cloudLessons = 0;
   Timer? cloudWatch;
+  final CloudSpeech? cloudSpeech = CloudSpeech.fromEnvironment();
+  bool speechRecording = false;
+
+  /// 車主記憶：雲端教一次、駕駛確認過就記住；只存在這台裝置。
+  OwnerMemory ownerMemory = OwnerMemory();
+  String? lastSubmittedText;
+  ({
+    String taskId,
+    String text,
+    String source,
+    Map<CabinSetting, RequestedChange> pending,
+  })?
+  learnCandidate;
+
+  /// 連網且有雲端辨識時，麥克風改成「錄音→雲端（台語／華語）」；否則照舊用離線辨識。
+  bool get cloudSpeechReady => cloudSpeech != null && cloudOnline;
 
   bool get modelReady => remoteModel?.ready ?? Slm.I.ready;
   String get modelStatus => remoteModel?.status ?? modelStatusText(Slm.I);
@@ -90,16 +111,17 @@ class _RepairScreenState extends State<RepairScreen> {
       if (mounted && fresh != lastFresh) setState(() => lastFresh = fresh);
     });
     cloudAssist = cloudAssistFromEnvironment(
+      link: cloudLink,
       onLesson: (_) {
         if (mounted) setState(() => cloudLessons++);
       },
     );
     if (cloudAssist != null) {
       Future<void> probe() async {
-        final online = await cloudReachable();
-        if (mounted && online != cloudOnline) {
-          setState(() => cloudOnline = online);
-        }
+        final changed = await cloudLink.check();
+        // 一連上網就先把台語辨識叫醒，台上第一句不用等冷啟動。
+        if (changed && cloudLink.online) unawaited(cloudSpeech?.warm());
+        if (mounted && changed) setState(() {});
       }
 
       unawaited(probe());
@@ -108,13 +130,27 @@ class _RepairScreenState extends State<RepairScreen> {
         (_) => unawaited(probe()),
       );
     }
+    unawaited(() async {
+      try {
+        final dir = await getApplicationSupportDirectory();
+        final memory = OwnerMemory(file: File('${dir.path}/owner_memory.json'));
+        await memory.load();
+        if (mounted) setState(() => ownerMemory = memory);
+      } catch (_) {
+        // 存不了檔就只放在記憶體，不影響其他功能。
+      }
+    }());
     controller = RepairController(
       parseTimeout: Duration(seconds: remoteModel == null ? 60 : 30),
       parser: RepairParser(
         (system, prompt) {
           if (!modelReady) return Future.error(StateError('請先準備模型'));
           return remoteModel?.generate(system, prompt) ??
-              Slm.I.generate(system, prompt, timeout: const Duration(seconds: 55));
+              Slm.I.generate(
+                system,
+                prompt,
+                timeout: const Duration(seconds: 55),
+              );
         },
         onTrace: const bool.fromEnvironment('REPAIR_EVAL_LOG')
             ? (trace) => debugPrint(
@@ -122,6 +158,7 @@ class _RepairScreenState extends State<RepairScreen> {
               )
             : null,
         cloud: cloudAssist,
+        recall: (text) => ownerMemory.recall(text)?.changes,
       ).call,
       actuator: actuator.call,
     );
@@ -201,6 +238,7 @@ class _RepairScreenState extends State<RepairScreen> {
         phase == RepairPhase.awaitingConfirmation ||
         phase == RepairPhase.awaitingClarification ||
         phase == RepairPhase.failed;
+    lastSubmittedText = value;
     final accepted = active
         ? await collaboration.revise(value)
         : await collaboration.newTask(value);
@@ -209,6 +247,7 @@ class _RepairScreenState extends State<RepairScreen> {
 
   void _capturePendingChanges() {
     final task = controller.snapshot;
+    _learnFromTask(task);
     if (task.taskId != previousTaskId) {
       changedSettings = {};
     } else if (task.phase != RepairPhase.parsing) {
@@ -222,16 +261,159 @@ class _RepairScreenState extends State<RepairScreen> {
     previousPending = task.pending;
   }
 
+  /// 雲端（或記憶）提出、駕駛確認後完成的需求，寫進車主記憶。
+  void _learnFromTask(RepairSnapshot task) {
+    final id = task.taskId;
+    if (id == null) return;
+    final candidate = learnCandidate;
+    if (task.phase == RepairPhase.awaitingConfirmation) {
+      final source = task.patchSource;
+      if ((source == 'cloud' || source == 'memory') &&
+          lastSubmittedText != null) {
+        learnCandidate = (
+          taskId: id,
+          text: lastSubmittedText!,
+          source: source!,
+          pending: task.pending,
+        );
+      } else if (candidate != null && candidate.taskId == id) {
+        // 同一個任務後來被局部修改：記住駕駛最後確認的版本。
+        learnCandidate = (
+          taskId: id,
+          text: candidate.text,
+          source: candidate.source,
+          pending: task.pending,
+        );
+      }
+    } else if (task.phase == RepairPhase.completed &&
+        candidate != null &&
+        candidate.taskId == id) {
+      learnCandidate = null;
+      unawaited(
+        ownerMemory
+            .remember(
+              text: candidate.text,
+              changes: candidate.pending,
+              source: candidate.source,
+            )
+            .then((_) {
+              if (mounted) setState(() {});
+            }),
+      );
+    } else if (task.phase == RepairPhase.cancelled && candidate?.taskId == id) {
+      learnCandidate = null;
+    }
+  }
+
+  void _showMemory() {
+    showDialog<void>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setLocal) => AlertDialog(
+          backgroundColor: CockpitStyle.panel,
+          title: const Text('車主記憶（只存在這台車上）'),
+          content: SizedBox(
+            width: 440,
+            child: ownerMemory.entries.isEmpty
+                ? const Text('還沒有記憶。連網時由雲端理解、駕駛確認過的需求會記在這裡，之後斷網也能用。')
+                : ListView(
+                    shrinkWrap: true,
+                    children: [
+                      for (final entry in ownerMemory.entries)
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text('「${entry.phrase}」'),
+                          subtitle: Text(
+                            '${entry.changes.entries.map((e) => '${_settingName(e.key)}${_changeName(e.value)}').join('、')}'
+                            '${entry.uses > 0 ? '・用過 ${entry.uses} 次' : ''}',
+                          ),
+                          trailing: IconButton(
+                            tooltip: '刪除這條記憶',
+                            icon: const Icon(Icons.delete_outline),
+                            onPressed: () async {
+                              await ownerMemory.forget(entry);
+                              setLocal(() {});
+                              if (mounted) setState(() {});
+                            },
+                          ),
+                        ),
+                    ],
+                  ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('關閉'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _checkSpeech() async {
     try {
       final available = await speech.isAvailable();
       if (mounted) setState(() => speechAvailable = available);
+      // 有離線辨識服務但缺繁中語言包時，請系統下載（只下載語言包，不改走雲端）。
+      if (available) {
+        final status = await speech.prepareLanguage();
+        if (mounted && status == 'downloading') {
+          setState(() => speechStatus = '正在下載繁體中文離線語音，完成前請先輸入文字。');
+        }
+      }
     } catch (_) {
       if (mounted) setState(() => speechAvailable = false);
     }
   }
 
+  /// 連網時：第一次按開始錄音，第二次按送雲端辨識；結果一樣只填入文字，由使用者核對後送出。
+  Future<void> _cloudSpeech() async {
+    final cloud = cloudSpeech!;
+    if (!speechRecording) {
+      try {
+        await speech.startRecording();
+        if (mounted) {
+          setState(() {
+            speechRecording = true;
+            speechListening = true;
+            speechStatus = '正在聆聽（雲端）；說完再按一次。';
+          });
+        }
+      } catch (_) {
+        if (mounted) setState(() => speechStatus = '無法錄音，請用文字輸入。');
+      }
+      return;
+    }
+    final request = ++speechRequest;
+    setState(() {
+      speechRecording = false;
+      speechStatus = '雲端辨識中…';
+    });
+    try {
+      final audio = await speech.stopRecording();
+      final result = await cloud.transcribe(audio);
+      if (mounted && request == speechRequest) {
+        input.text = result.text;
+        speechStatus = result.lang == 'nan'
+            ? '雲端台語辨識・請核對後再提交'
+            : '雲端語音辨識・請核對後再提交';
+      }
+    } catch (_) {
+      if (mounted && request == speechRequest) {
+        speechStatus = '雲端辨識沒有完成，請再說一次或輸入文字。';
+      }
+    } finally {
+      if (mounted && request == speechRequest) {
+        setState(() => speechListening = false);
+      }
+    }
+  }
+
   Future<void> _listenSpeech() async {
+    if (speechRecording || (cloudSpeechReady && !speechListening)) {
+      return _cloudSpeech();
+    }
     if (speechListening) {
       ++speechRequest;
       try {
@@ -490,6 +672,32 @@ class _RepairScreenState extends State<RepairScreen> {
           ],
           const SizedBox(width: 24),
         ],
+        // 直放（窄螢幕）也要看得出現在是離線還是連網：決賽 S21 直放。
+        if (MediaQuery.sizeOf(context).width < 620 && cloudAssist != null) ...[
+          _cloudStatus(compact: true),
+          const SizedBox(width: 6),
+        ],
+        if (MediaQuery.sizeOf(context).width < 620)
+          IconButton(
+            tooltip: '車主記憶',
+            onPressed: _showMemory,
+            icon: Badge(
+              isLabelVisible: ownerMemory.entries.isNotEmpty,
+              label: Text('${ownerMemory.entries.length}'),
+              child: const Icon(
+                Icons.psychology_outlined,
+                size: 19,
+                color: CockpitStyle.muted,
+              ),
+            ),
+          )
+        else ...[
+          TextButton(
+            onPressed: _showMemory,
+            child: Text('車主記憶 ${ownerMemory.entries.length}'),
+          ),
+          const SizedBox(width: 8),
+        ],
         const CockpitClock(),
         const SizedBox(width: 16),
         if (MediaQuery.sizeOf(context).width >= 620)
@@ -505,7 +713,7 @@ class _RepairScreenState extends State<RepairScreen> {
   );
 
   /// 頂部列的雲端狀態：連網時亮、離線時灰；連帶顯示本次累積的雲端教材數。
-  Widget _cloudStatus() => Row(
+  Widget _cloudStatus({bool compact = false}) => Row(
     mainAxisSize: MainAxisSize.min,
     children: [
       Container(
@@ -518,7 +726,9 @@ class _RepairScreenState extends State<RepairScreen> {
       ),
       const SizedBox(width: 6),
       Text(
-        cloudOnline
+        compact
+            ? (cloudOnline ? '雲端增強' : '離線')
+            : cloudOnline
             ? '雲端增強可用${cloudLessons > 0 ? '・教材 $cloudLessons 筆' : ''}'
             : '離線・本地運作',
         style: cockpitText(
@@ -810,14 +1020,22 @@ class _RepairScreenState extends State<RepairScreen> {
                   children: [
                     TextButton.icon(
                       onPressed:
-                          speechListening || (canInput && speechAvailable)
+                          speechListening ||
+                              (canInput &&
+                                  (speechAvailable || cloudSpeechReady))
                           ? _listenSpeech
                           : null,
                       icon: Icon(
                         speechListening ? Icons.stop : Icons.mic_none,
                         size: 17,
                       ),
-                      label: Text(speechListening ? '停止聆聽' : '說出需求'),
+                      label: Text(
+                        speechRecording
+                            ? '說完了'
+                            : speechListening
+                            ? '停止聆聽'
+                            : '說出需求',
+                      ),
                     ),
                     if (!speechAvailable)
                       Text(
@@ -890,11 +1108,14 @@ class _RepairScreenState extends State<RepairScreen> {
                     weight: FontWeight.w500,
                   ),
                 ),
-                if (task.patchSource == 'cloud') ...[
+                if (task.patchSource == 'cloud' ||
+                    task.patchSource == 'memory') ...[
                   const SizedBox(height: 8),
                   Text(
-                    task.clarification == null
-                        ? '雲端解讀（連網增強）・仍需駕駛確認'
+                    task.patchSource == 'memory'
+                        ? '來自車主記憶（之前確認過）・仍需駕駛確認'
+                        : task.clarification == null
+                        ? '雲端解讀（連網增強）・確認後會記住'
                         : '雲端也無法確定，請補充一項',
                     style: cockpitText(13, color: CockpitStyle.accent),
                   ),

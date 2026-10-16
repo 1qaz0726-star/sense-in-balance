@@ -1,0 +1,6 @@
+name = "sib-asr"
+main = "src/index.js"
+compatibility_date = "2025-09-01"
+
+[observability]
+enabled = true

@@ -151,7 +151,9 @@ String srcLabel(Envelope e) {
       return '規則直出・安全級不經模型';
     case 'kb':
       final online = e.state['online'] == true;
-      return online ? '本地知識庫・雲端尚未啟用' : '本地知識庫・離線作答';
+      return online ? '本地知識庫' : '本地知識庫・離線作答';
+    case 'cloud':
+      return '雲端增強・連網作答';
   }
   return '';
 }
