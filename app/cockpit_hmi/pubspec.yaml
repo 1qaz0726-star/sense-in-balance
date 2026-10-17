@@ -72,6 +72,18 @@ flutter:
   assets:
     - assets/fonts/OFL.txt
 
+  # repair-web-assets-begin（packer 產生，不要手改）
+    - assets/repair_web/
+    - assets/repair_web/assets/
+    - assets/repair_web/assets/assets/fonts/
+    - assets/repair_web/assets/fonts/
+    - assets/repair_web/assets/packages/cupertino_icons/assets/
+    - assets/repair_web/assets/packages/flutter_map/lib/assets/
+    - assets/repair_web/assets/shaders/
+    - assets/repair_web/canvaskit/
+    - assets/repair_web/canvaskit/chromium/
+    - assets/repair_web/icons/
+  # repair-web-assets-end
   # To add assets to your application, add an assets section, like this:
   # assets:
   #   - images/a_dot_burr.jpeg

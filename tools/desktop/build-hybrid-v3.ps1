@@ -69,7 +69,9 @@ try {
     $env:PATH = "$env:JAVA_HOME\bin;$(Split-Path -Parent $FlutterPath);$env:PATH"
     [void][System.IO.Directory]::CreateDirectory($taskOutputRoot)
     try {
-        $taskBuildLock = [System.IO.File]::Open((Join-Path $taskOutputRoot 'build.lock'), [System.IO.FileMode]::OpenOrCreate, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
+        # Both variants share Flutter's APK output. Serialize copying as well as
+        # building, even when Hybrid and C were invoked by different helpers.
+        $taskBuildLock = [System.IO.File]::Open((Join-Path $taskAsciiRepo '.local\cockpit-apk-build.lock'), [System.IO.FileMode]::OpenOrCreate, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
     } catch { throw 'Another Hybrid V3 build helper is running. Wait for it to finish; no build was started.' }
     Set-Location -LiteralPath $taskAppRoot
     $taskVersionLines = & $FlutterPath '--version' 2>&1
@@ -81,6 +83,16 @@ try {
     if ($Coordination -and $Mode -ne 'Driver') {
         if (-not (Test-Path -LiteralPath $PythonPath -PathType Leaf)) {
             throw 'Python is required to bundle the C driver web companion; select it with -PythonPath.'
+        }
+        # Generated web payloads are ignored by Git. Bootstrap their declared
+        # directories so a fresh clone can compile the web companion first.
+        $taskManifest = Get-Content -LiteralPath (Join-Path $taskAppRoot 'pubspec.yaml') -Raw -Encoding UTF8
+        foreach ($taskMatch in [regex]::Matches($taskManifest, '(?m)^\s+-\s+(assets/repair_web/[^\r\n]*)$')) {
+            $taskAssetDirectory = [IO.Path]::GetFullPath((Join-Path $taskAppRoot $taskMatch.Groups[1].Value.Trim()))
+            if (-not $taskAssetDirectory.StartsWith($taskAppRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+                throw 'Generated asset directory escaped the app workspace.'
+            }
+            [void][IO.Directory]::CreateDirectory($taskAssetDirectory)
         }
         & $FlutterPath build web --release --no-pub -t lib/main_repair_web.dart --output=build/repair_web --no-web-resources-cdn --pwa-strategy=none --dart-define=CABIN_COORDINATION=true
         if ($LASTEXITCODE -ne 0) { throw 'C driver web build failed; no new host APK was produced.' }

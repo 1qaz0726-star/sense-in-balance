@@ -61,6 +61,7 @@ class _RepairMonitorState extends State<RepairMonitor> {
   final feedback = RepairSpeechFeedback();
   final summaryScroll = ScrollController();
   bool speechBusy = false;
+  int speechGeneration = 0;
   String? speechNotice;
 
   bool get isDriver => frameFresh && status?['role'] == 'driver';
@@ -109,9 +110,7 @@ class _RepairMonitorState extends State<RepairMonitor> {
             event!.decision.urgency == Urgency.safety;
     if (urgent && !safetyActive) {
       selectedView = 0;
-      unawaited(feedback.stop().catchError((Object _) {}));
-      speechBusy = false;
-      speechNotice = null;
+      _stopResultSpeech();
     }
     safetyActive = urgent;
   }
@@ -206,6 +205,7 @@ class _RepairMonitorState extends State<RepairMonitor> {
                 m['task'] is Map) {
               if (mounted) {
                 final previousTask = status?['task'];
+                final previousSpeechIdentity = _completedSpeechIdentity();
                 final nextTask = m['task'] as Map;
                 final becameDriver =
                     status?['role'] != 'driver' && m['role'] == 'driver';
@@ -242,6 +242,11 @@ class _RepairMonitorState extends State<RepairMonitor> {
                   lastAt = DateTime.now();
                   online = true;
                   trackSafetyTransition();
+                  if (taskChanged ||
+                      sessionChanged ||
+                      previousSpeechIdentity != _completedSpeechIdentity()) {
+                    _stopResultSpeech();
+                  }
                 });
                 if (becameDriver || taskChanged || resultArrived) {
                   _returnToSummaryTop();
@@ -276,6 +281,7 @@ class _RepairMonitorState extends State<RepairMonitor> {
   void lost() {
     if (!mounted) return;
     ++generation;
+    _stopResultSpeech();
     unawaited(subscription?.cancel());
     _closeQuietly(channel);
     subscription = null;
@@ -304,6 +310,7 @@ class _RepairMonitorState extends State<RepairMonitor> {
   @override
   void dispose() {
     ++generation;
+    ++speechGeneration;
     retry?.cancel();
     watch?.cancel();
     replyWatch?.cancel();
@@ -435,26 +442,65 @@ class _RepairMonitorState extends State<RepairMonitor> {
         '音樂音量$music，導航音量$navigation。';
   }
 
+  /// A result narration belongs to one validated receipt, never just a fresh
+  /// socket. Profile/task replacement invalidates any pending async TTS work.
+  String? _completedSpeechIdentity() {
+    if (!frameFresh || cabinAttentionBlocked(cabinContext)) return null;
+    final task = status?['task'];
+    if (task is! Map) return null;
+    final state = completedSimulatedCabinState(
+      task,
+      cabinContext: cabinContext,
+    );
+    if (state == null) return null;
+    final result = task['result'];
+    final execution = result is Map ? result['execution_context'] : null;
+    return jsonEncode({
+      'task_id': task['task_id'],
+      'revision': task['revision'],
+      'schema': status?['schema'],
+      'execution_context': execution is Map
+          ? {
+              'cabin_session_id': execution['cabin_session_id'],
+              'profile_id': execution['profile_id'],
+              'profile_revision': execution['profile_revision'],
+            }
+          : null,
+      'state': state,
+    });
+  }
+
+  void _stopResultSpeech() {
+    ++speechGeneration;
+    speechBusy = false;
+    speechNotice = null;
+    unawaited(feedback.stop().catchError((Object _) {}));
+  }
+
   Future<void> _speakResult() async {
     final text = _completedResultText();
-    if (text == null || speechBusy) return;
+    final identity = _completedSpeechIdentity();
+    if (text == null || identity == null || speechBusy) return;
+    final request = ++speechGeneration;
+    bool current() =>
+        mounted &&
+        request == speechGeneration &&
+        _completedSpeechIdentity() == identity;
     setState(() {
       speechBusy = true;
       speechNotice = null;
     });
     try {
-      final available = await feedback.speak(
-        text,
-        allowed: () =>
-            mounted && frameFresh && !cabinAttentionBlocked(cabinContext),
-      );
-      if (mounted) {
+      final available = await feedback.speak(text, allowed: current);
+      if (current()) {
         speechNotice = available ? '已使用本機離線語音播報模擬回報。' : '離線語音尚未就緒，請閱讀文字結果。';
       }
     } catch (_) {
-      if (mounted) speechNotice = '無法使用本機離線語音，請閱讀文字結果。';
+      if (current()) speechNotice = '無法使用本機離線語音，請閱讀文字結果。';
     } finally {
-      if (mounted) setState(() => speechBusy = false);
+      if (mounted && request == speechGeneration) {
+        setState(() => speechBusy = false);
+      }
     }
   }
 

@@ -8,6 +8,8 @@ import 'package:cockpit_hmi/main_repair_web.dart';
 import 'package:cockpit_hmi/repair_collaboration_widgets.dart';
 import 'package:cockpit_hmi/repair_task.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
@@ -79,6 +81,24 @@ Map<String, dynamic> _status(
   'cabin_state': {'rearFan': null, 'mediaVolume': 5, 'navVolume': 5},
 };
 
+Map<String, dynamic> _completedTask(Map context) => {
+  ..._task(phase: 'completed'),
+  'result': {
+    'success': true,
+    'simulated': true,
+    'state': {'rearFan': 3, 'mediaVolume': 4, 'navVolume': 5},
+    'items': {
+      'mediaVolume': {'before': 5, 'after': 4, 'success': true},
+      'navVolume': {'before': 5, 'after': 5, 'success': true},
+    },
+    'execution_context': {
+      'cabin_session_id': context['cabin_session_id'],
+      'profile_id': context['profile_id'],
+      'profile_revision': context['profile_revision'],
+    },
+  },
+};
+
 class _Sink implements WebSocketSink {
   final commands = <Map>[];
   @override
@@ -143,6 +163,140 @@ Future<void> _panel(
 );
 
 void main() {
+  for (final replacement in ['new task', 'new cabin session']) {
+    testWidgets('pending result speech cannot outlive a $replacement', (
+      tester,
+    ) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(1100, 1100);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
+      final voices = Completer<List<Map<String, dynamic>>>();
+      final calls = <String>[];
+      const tts = MethodChannel('flutter_tts');
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(tts, (call) async {
+            calls.add(call.method);
+            return call.method == 'getVoices' ? voices.future : 1;
+          });
+      addTearDown(
+        () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(tts, null),
+      );
+      final channel = _Channel();
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: CockpitStyle.theme,
+          home: RepairMonitor(
+            url: Uri.parse('ws://cabin/repair'),
+            channelFactory: (_) => channel,
+          ),
+        ),
+      );
+      await tester.pump();
+      final context = _context(restricted: true);
+      channel.emit(_status(context, task: _completedTask(context)));
+      await tester.pump();
+      await tester.ensureVisible(find.text('播報結果'));
+      await tester.tap(find.text('播報結果'));
+      await tester.pump();
+      expect(calls, contains('getVoices'));
+      final stopsBefore = calls.where((call) => call == 'stop').length;
+      if (replacement == 'new task') {
+        final nextTask = _task()..['task_id'] = 'different-task';
+        channel.emit(_status(context, task: nextTask));
+      } else {
+        final nextContext = _context(restricted: true)
+          ..['cabin_session_id'] = 'different-session';
+        channel.emit(_status(nextContext, task: _completedTask(nextContext)));
+      }
+      await tester.pump();
+      voices.complete([
+        {
+          'name': 'local',
+          'locale': 'zh-TW',
+          'network_required': '0',
+          'features': '',
+        },
+      ]);
+      await tester.pump();
+      await tester.pump();
+      expect(
+        calls.where((call) => call == 'stop').length,
+        greaterThan(stopsBefore),
+      );
+      expect(calls, isNot(contains('speak')));
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+      unawaited(channel.incoming.close());
+      debugDefaultTargetPlatformOverride = null;
+    });
+  }
+
+  testWidgets('disconnect stops an already started result narration', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1100, 1100);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    final calls = <String>[];
+    const tts = MethodChannel('flutter_tts');
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(tts, (call) async {
+          calls.add(call.method);
+          if (call.method == 'getVoices') {
+            return [
+              {
+                'name': 'local',
+                'locale': 'zh-TW',
+                'network_required': '0',
+                'features': '',
+              },
+            ];
+          }
+          return 1;
+        });
+    addTearDown(
+      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(tts, null),
+    );
+    final channel = _Channel();
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: CockpitStyle.theme,
+        home: RepairMonitor(
+          url: Uri.parse('ws://cabin/repair'),
+          channelFactory: (_) => channel,
+        ),
+      ),
+    );
+    await tester.pump();
+    final context = _context(restricted: true);
+    channel.emit(_status(context, task: _completedTask(context)));
+    await tester.pump();
+    await tester.ensureVisible(find.text('播報結果'));
+    await tester.tap(find.text('播報結果'));
+    await tester.pump();
+    await tester.pump();
+    expect(calls, contains('speak'));
+    final stopsBefore = calls.where((call) => call == 'stop').length;
+    unawaited(channel.incoming.close());
+    await tester.pump();
+    expect(
+      calls.where((call) => call == 'stop').length,
+      greaterThan(stopsBefore),
+    );
+    expect(find.text('等待重新連線'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    debugDefaultTargetPlatformOverride = null;
+  });
+
   testWidgets(
     'priority attention removes nonurgent driver controls and details',
     (tester) async {
