@@ -1,0 +1,19 @@
+--------- beginning of main
+10-17 17:18:01.689  5004  5041 I flutter : [IMPORTANT:flutter/shell/platform/android/android_context_gl_impeller.cc(104)] Using the Impeller rendering backend (OpenGLES).
+10-17 17:18:39.516  5004  5004 I flutter : ✅ Set active inference model: qwen25-15b-v3-clean-q8-c2048
+10-17 17:18:39.517  5004  5004 I flutter : ✅ Inference model installed and set as active: qwen25-15b-v3-clean-q8-c2048
+10-17 17:18:39.517  5004  5004 I flutter : UnifiedModelManager initialized successfully
+10-17 17:18:39.517  5004  5004 I flutter : UnifiedModelManager: Model qwen25-15b-v3-clean-q8-c2048 installed: true
+10-17 17:18:39.518  5004  5004 I flutter : UnifiedModelManager: Model qwen25-15b-v3-clean-q8-c2048 installed: true
+10-17 17:18:39.518  5004  5004 I flutter : Using unified model file: /storage/emulated/0/Android/data/com.auohack.cockpit_hmi.coordination/files/models/qwen25-15b-v3-clean-q8-c2048/qwen25-15b-v3-clean-q8-c2048.litertlm
+10-17 17:19:03.719  5004  5004 I flutter : [MobileSession.addQueryChunk] modelType=ModelType.qwen, fileType=ModelFileType.task, msgType=MessageType.text
+10-17 17:19:03.719  5004  5004 I flutter : [transformToChatPrompt] modelType=ModelType.qwen, fileType=ModelFileType.task, messageType=MessageType.text, isUser=true
+10-17 17:19:03.719  5004  5004 I flutter : [transformToChatPrompt] Using _formatToolResponseContent, result length=1111
+10-17 17:19:03.719  5004  5004 I flutter : [MobileSession.addQueryChunk] finalPrompt length=1111
+10-17 17:19:24.443  5004  5004 I flutter : UnifiedModelManager: Model qwen25-15b-v3-clean-q8-c2048 installed: true
+10-17 17:19:24.444  5004  5004 I flutter : UnifiedModelManager: Model qwen25-15b-v3-clean-q8-c2048 installed: true
+10-17 17:19:24.444  5004  5004 I flutter : Using unified model file: /storage/emulated/0/Android/data/com.auohack.cockpit_hmi.coordination/files/models/qwen25-15b-v3-clean-q8-c2048/qwen25-15b-v3-clean-q8-c2048.litertlm
+10-17 17:19:37.045  5004  5004 I flutter : [MobileSession.addQueryChunk] modelType=ModelType.qwen, fileType=ModelFileType.task, msgType=MessageType.text
+10-17 17:19:37.045  5004  5004 I flutter : [transformToChatPrompt] modelType=ModelType.qwen, fileType=ModelFileType.task, messageType=MessageType.text, isUser=true
+10-17 17:19:37.045  5004  5004 I flutter : [transformToChatPrompt] Using _formatToolResponseContent, result length=1111
+10-17 17:19:37.045  5004  5004 I flutter : [MobileSession.addQueryChunk] finalPrompt length=1111

@@ -1,0 +1,342 @@
+{
+  "artifact_type": "independent_saved_pc_ui_and_native_evidence_review",
+  "reviewed_at_utc": "2026-10-17T09:35:01.079502+00:00",
+  "overall": "SCOPED_SAVED_JOURNEY_PASS",
+  "production_readiness": "NEEDS_WORK; no production or real-vehicle certification",
+  "review_method": "Read-only independent JSON assertions, original model log cross-check, original final test/analyzer log review and visual inspection of five actual emulator screenshots. No rerun or device operation by this reviewer.",
+  "checks_passed": 30,
+  "checks_total": 30,
+  "checks": [
+    {
+      "id": "all_statuses_schema_2",
+      "status": "PASS",
+      "evidence": [
+        "pc-A-completed.json",
+        "pc-B-session.json",
+        "pc-B-unsupported.json",
+        "pc-B-blocked.json",
+        "pc-B-revised-blocked.json",
+        "pc-B-two-blockers.json",
+        "pc-B-resume-required.json",
+        "pc-B-completed.json"
+      ],
+      "detail": "All eight saved observer envelopes are schema 2."
+    },
+    {
+      "id": "a_successful_three_item_ack",
+      "status": "PASS",
+      "evidence": [
+        "pc-A-completed.json"
+      ],
+      "detail": "A has a successful simulated three-item execution receipt."
+    },
+    {
+      "id": "a_values_2_4_5",
+      "status": "PASS",
+      "evidence": [
+        "pc-A-completed.json"
+      ],
+      "detail": "A decreases fan/media and keeps navigation volume."
+    },
+    {
+      "id": "a_receipt_exact_session_profile",
+      "status": "PASS",
+      "evidence": [
+        "pc-A-completed.json"
+      ],
+      "detail": "A receipt binds exactly to the three-field execution identity."
+    },
+    {
+      "id": "b_new_session",
+      "status": "PASS",
+      "evidence": [
+        "pc-A-completed.json",
+        "pc-B-session.json"
+      ],
+      "detail": "B uses a new cabin session after the completed A task."
+    },
+    {
+      "id": "b_fresh_parked_idle_reset",
+      "status": "PASS",
+      "evidence": [
+        "pc-B-session.json"
+      ],
+      "detail": "Saved B transition is parked, idle and reset; fan is not readable."
+    },
+    {
+      "id": "b_pairing_and_lease_revoked",
+      "status": "PASS",
+      "evidence": [
+        "pc-B-session.json"
+      ],
+      "detail": "A pairing and passenger repair authorization were revoked for the new B session."
+    },
+    {
+      "id": "b_identity_stable_through_journey",
+      "status": "PASS",
+      "evidence": [
+        "pc-B-session.json",
+        "pc-B-unsupported.json",
+        "pc-B-blocked.json",
+        "pc-B-revised-blocked.json",
+        "pc-B-two-blockers.json",
+        "pc-B-resume-required.json",
+        "pc-B-completed.json"
+      ],
+      "detail": "All B stages remain in the same B cabin/profile revision."
+    },
+    {
+      "id": "b_same_initial_three_pending",
+      "status": "PASS",
+      "evidence": [
+        "pc-A-completed.json",
+        "pc-B-unsupported.json"
+      ],
+      "detail": "B retains the same three initial intents, including the unsupported fan."
+    },
+    {
+      "id": "b_capability_blocks_confirmation",
+      "status": "PASS",
+      "evidence": [
+        "pc-B-unsupported.json"
+      ],
+      "detail": "The unsupported fan blocks the batch rather than silently allowing a partial batch."
+    },
+    {
+      "id": "b_fan_readability_capability",
+      "status": "PASS",
+      "evidence": [
+        "pc-B-session.json",
+        "pc-B-unsupported.json",
+        "pc-B-blocked.json",
+        "pc-B-revised-blocked.json",
+        "pc-B-two-blockers.json",
+        "pc-B-resume-required.json",
+        "pc-B-completed.json"
+      ],
+      "detail": "Top-level observable B state never reports a readable fan value."
+    },
+    {
+      "id": "handover_blocks_grant_and_confirm",
+      "status": "PASS",
+      "evidence": [
+        "pc-B-blocked.json"
+      ],
+      "detail": "Handover blocks new grants and both confirmation modes."
+    },
+    {
+      "id": "existing_authorization_retained_for_revision",
+      "status": "PASS",
+      "evidence": [
+        "pc-B-blocked.json",
+        "pc-B-revised-blocked.json"
+      ],
+      "detail": "The existing unexpired authorization remains bound to this task while the passenger revises it."
+    },
+    {
+      "id": "same_task_revision_1_to_2",
+      "status": "PASS",
+      "evidence": [
+        "pc-B-blocked.json",
+        "pc-B-revised-blocked.json"
+      ],
+      "detail": "Revision updates the same request rather than making a new request or losing its history."
+    },
+    {
+      "id": "only_fan_removed_other_intents_retained",
+      "status": "PASS",
+      "evidence": [
+        "pc-B-revised-blocked.json"
+      ],
+      "detail": "The fan is explicitly removed; media decrease and navigation keep survive."
+    },
+    {
+      "id": "revised_candidate_stays_blocked_unexecuted",
+      "status": "PASS",
+      "evidence": [
+        "pc-B-unsupported.json",
+        "pc-B-revised-blocked.json"
+      ],
+      "detail": "A now-supported candidate is still unexecuted while attention is blocked."
+    },
+    {
+      "id": "two_independent_blockers",
+      "status": "PASS",
+      "evidence": [
+        "pc-B-two-blockers.json"
+      ],
+      "detail": "A real host-generated mock motorcycle event and handover are independently active."
+    },
+    {
+      "id": "two_blockers_no_execution",
+      "status": "PASS",
+      "evidence": [
+        "pc-B-two-blockers.json"
+      ],
+      "detail": "The two-blocker snapshot still has the unexecuted latest candidate."
+    },
+    {
+      "id": "all_blockers_cleared_require_resume",
+      "status": "PASS",
+      "evidence": [
+        "pc-B-resume-required.json"
+      ],
+      "detail": "Clearing all sources requires explicit resume confirmation, not ordinary confirmation."
+    },
+    {
+      "id": "release_did_not_auto_execute",
+      "status": "PASS",
+      "evidence": [
+        "pc-B-unsupported.json",
+        "pc-B-resume-required.json"
+      ],
+      "detail": "At release, receipt remains null and exposed control values remain unchanged."
+    },
+    {
+      "id": "b_final_success_two_item_ack",
+      "status": "PASS",
+      "evidence": [
+        "pc-B-revised-blocked.json",
+        "pc-B-completed.json"
+      ],
+      "detail": "Final B receipt covers only music and navigation, with no fan command item."
+    },
+    {
+      "id": "b_receipt_exact_context",
+      "status": "PASS",
+      "evidence": [
+        "pc-B-completed.json"
+      ],
+      "detail": "Final B receipt matches the current B cabin session/profile identity."
+    },
+    {
+      "id": "b_expected_result_values",
+      "status": "PASS",
+      "evidence": [
+        "pc-B-completed.json"
+      ],
+      "detail": "Music decreases once from 5 to 4 in the observed receipt and navigation remains 5; fan display stays unavailable."
+    },
+    {
+      "id": "b_completion_clears_resume_and_authorization",
+      "status": "PASS",
+      "evidence": [
+        "pc-B-completed.json"
+      ],
+      "detail": "Completed B clears resume requirement and passenger repair authorization."
+    },
+    {
+      "id": "final_unit_suite_215",
+      "status": "PASS",
+      "evidence": [
+        "flutter-test-full.log"
+      ],
+      "detail": "The final full-suite log explicitly reports 215 tests passed; not re-executed by this reviewer."
+    },
+    {
+      "id": "analyzer_clean",
+      "status": "PASS",
+      "evidence": [
+        "flutter-analyze.log"
+      ],
+      "detail": "The final analyzer log explicitly reports no issues; this is static analyzer output, not an all-system defect guarantee."
+    },
+    {
+      "id": "native_true_cpu_raw_candidate",
+      "status": "PASS",
+      "evidence": [
+        "native/native-second-start-full.log"
+      ],
+      "detail": "Native original log independently confirms one CPU candidate, 33750 ms, no guard rewrite."
+    },
+    {
+      "id": "native_start_failure_preserved",
+      "status": "PASS",
+      "evidence": [
+        "native/native-results.json"
+      ],
+      "detail": "First native startup failed; one normal restart succeeded. This is not a clean-start reliability pass."
+    },
+    {
+      "id": "native_resume_not_actuation",
+      "status": "PASS",
+      "evidence": [
+        "native/status-resume-final.json"
+      ],
+      "detail": "Native trial covers candidate plus attention retention/release, not complete native paired actuation."
+    },
+    {
+      "id": "actual_screens_present",
+      "status": "PASS",
+      "evidence": [
+        "screens/pc-B-driver-blocked.png",
+        "screens/pc-B-driver-blindspot.png",
+        "screens/pc-B-driver-resume-required.png",
+        "screens/pc-B-driver-completed.png",
+        "screens/pc-B-tablet-completed.png"
+      ],
+      "detail": "All five independently viewed real emulator screenshots exist; visual observations are recorded separately."
+    }
+  ],
+  "visual_observations": [
+    {
+      "screens": [
+        "pc-B-driver-blocked.png",
+        "pc-B-driver-blindspot.png"
+      ],
+      "observation": "Both retain the original instrument geometry in the viewed portrait snapshots; blind-spot warning fills its reserved top slot and motorcycle appears on the right. The attention strip remains at the bottom. This is visual inspection, not a pixel-diff proof for all frames."
+    },
+    {
+      "screens": [
+        "pc-B-driver-resume-required.png"
+      ],
+      "observation": "After release the driver remains on instruments and sees a retained-request message with 查看摘要; no automatic jump or execution receipt is shown."
+    },
+    {
+      "screens": [
+        "pc-B-driver-completed.png",
+        "pc-B-tablet-completed.png"
+      ],
+      "observation": "Both show completed B simulated results with music 4/10 and navigation 5/10; fan is — / 不提供. The phone explicitly says no real vehicle connected."
+    }
+  ],
+  "performance_evidence": {
+    "pc_ui_displayed_previous_inference_seconds": [
+      8.1,
+      4.6,
+      2.5
+    ],
+    "pc_timing_source": "Model display strings in A completed, B unsupported and B revised saved statuses; rounded display values, not precise raw timing nor page-load metric.",
+    "native_raw_single_inference_ms": 33750,
+    "risks": "PC UI inference exceeded 3 seconds for the first two saved calls; native cold start failed once and single-CPU inference was slow. Explicit wait state, PC fallback and physical S9 testing remain important."
+  },
+  "limits": [
+    "These saved states prove the observed sequence and UI availability gates. Negative backend rejection and exactly-once under retries are covered by separate controller/unit tests, not re-proven by status snapshots alone.",
+    "B top-level cabin_state and UI mask fan. The internal task.result.state still contains mock rearFan=3; this is not a claim that every raw diagnostic field is masked or that the actual vehicle exposes that value.",
+    "Only two fictional capability profiles, mock attention/driving/blind-spot sources and simulated actuator; no OEM adapter, real CAN, ADAS or autonomous-driving control.",
+    "Native C had an initial startup failure and one normal successful restart; only one native candidate plus retention/release, not a complete native paired A/B journey.",
+    "No physical S9 or phone, GPU performance, stability campaign, whole-machine network disconnect, cloud credential, ASR, human participant, sealed blind test or safety outcome verified.",
+    "Three PC UI utterances and one native utterance do not measure general model accuracy or an improvement over the original.",
+    "The generic role Laravel/Playwright commands do not target this Flutter APK system. Equivalent inventory and native emulator screenshots were used; qa-playwright-capture.sh was absent. No cross-browser or generic desktop/mobile web certification."
+  ],
+  "evidence_sha256": {
+    "pc-A-completed.json": "f0080417708f679629e6e41d222c60d0a6b378cac5322a63c8f27bd43a398536",
+    "pc-B-session.json": "578cc86279b1223c1ba6a7e12950d4d47f92241ad559936e03ebe1de903a52b0",
+    "pc-B-unsupported.json": "2f19f060dde807f488eb89f656000bafbbc6362559393344f3d0563d02ec34fe",
+    "pc-B-blocked.json": "30a51c2de83e47d61faeabc0c3a8de67f78f5ece21e47588409e1363886ebd3e",
+    "pc-B-revised-blocked.json": "4a7b8795b0cf31b9b1162b5108cd95909d30e85a5a227294abba093ce06b53cd",
+    "pc-B-two-blockers.json": "ee015fcb24ba93c61db4ae34680dd0714df1b80f41e6998a228d700b38196eba",
+    "pc-B-resume-required.json": "d102ff53d8e211357e5e57ccaef0b68f8edd66397cb01dd4daa3087bbc7084ee",
+    "pc-B-completed.json": "a7fac9fc867fc94d84cbfd0891b0d6a73d78df33f4e6d01ec3eafd0513c70f1e",
+    "flutter-test-full.log": "a1c3b40a5fad92aa3020cf150125d414cfa531c865f962aecb334f54b8cf5fc6",
+    "flutter-analyze.log": "6976f46614101318161e365a462b16f0502b5d66682ef78f0c7ea2eb7ce50a98",
+    "native/native-results.json": "50539b9f2aac3c75262eff071a5fb5a02f2ce62dd8ee12ca885ed48f58a98e88",
+    "native/native-second-start-full.log": "8128db8cd298941d04d55d67662a12fce154b701f289c9f70829b86e7293db09",
+    "native/status-resume-final.json": "6856d6ced411817bd7cec49976a722f48349c3526c3ffa60630063ec4e6033cd",
+    "screens/pc-B-driver-blocked.png": "e0af06fc9d1853e6d0de2c438e9e61f9ae583de1020b858929fec90bd5161e2c",
+    "screens/pc-B-driver-blindspot.png": "a107a65034d61a9947c701a84915b70693362c785b7c6dec35f8c385c2470aeb",
+    "screens/pc-B-driver-resume-required.png": "4124449deb646b1c1576022f747d27cdc39a2074ed12062d342614d9b02a4a5c",
+    "screens/pc-B-driver-completed.png": "e9219e106fb3cd23198b965dd84caadcbe69902faafa0cd6df0f9a29104758ab",
+    "screens/pc-B-tablet-completed.png": "20528be6db7f44e1f64dd0998a9d49ea966aa15abd89bb78d780be16b8e8a10e"
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "converter_revision": "google-ai-edge/litert-torch@ad05a3fa6426ffc2b809caf574a26c08b6c99a15;requirements_sha256=8a0b160ceeb29266a999a2432affe6a8bf1a1effa302629234c18684f527a83a",
+  "conversion_settings_sha256": "7d533914eb00163ff96d25fc40bd128d2e9755fc341914d4f33228dffeb919c7",
+  "tokenizer_sha256": "3fd169731d2cbde95e10bf356d66d5997fd885dd8dbb6fb4684da3f23b2585d8",
+  "chat_template_sha256": "cd8e9439f0570856fd70470bf8889ebd8b5d1107207f67a5efb46e342330527f",
+  "base_model_sha256": "dd924a11b4c220f385b51ffa522daea7c9f3d850e31b162bb5661df483c6d3ee",
+  "source_weights_sha256": "8b16d851a12c4ebfce55a399869b5258d8cf7e387b991074eabbd3a15c4acfb0",
+  "requirements_sha256": "8a0b160ceeb29266a999a2432affe6a8bf1a1effa302629234c18684f527a83a",
+  "package_versions": {
+    "litert-torch": "0.9.4",
+    "litert-converter": "0.4.0",
+    "litert-lm-builder": "0.18.0",
+    "ai-edge-litert": "2.2.0",
+    "ai-edge-quantizer": "0.9.0",
+    "torch": "2.13.0+cpu",
+    "torchao": "0.17.0+cpu",
+    "transformers": "5.20.1",
+    "tokenizers": "0.23.3",
+    "safetensors": "0.8.0",
+    "psutil": "7.1.0"
+  },
+  "settings_hash_definition": "SHA256 of UTF-8 json.dumps(settings, sort_keys=True, separators=(',', ':')); no source/output paths",
+  "base_hash_definition": "SHA256 of the common official base model.safetensors (single weight file); independent from source_weights_sha256",
+  "bundle_sha256": "abc57627d87b529328541e5a2194209fab641f3aa17de3c2a31376cc39de9702",
+  "source_tokenizer_sha256": "c0382117ea329cdf097041132f6d735924b697924d6f6fc3945713e96ce87539",
+  "source_bundle_tokenizer_bytes_match": false,
+  "bundle_container_version": [
+    1,
+    7,
+    0
+  ],
+  "source_preserved": true,
+  "converter_script_sha256": "28351f310f1e97d946ceecf0acf5a704d0ff0910b16f34baf2982f3c49b92c4e"
+}

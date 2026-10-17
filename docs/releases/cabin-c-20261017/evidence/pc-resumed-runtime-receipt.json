@@ -1,0 +1,193 @@
+{
+  "recorded_at": "2026-10-17T17:38:34.0066691+08:00",
+  "kind": "read_only_post_pause_restart_check",
+  "health": {
+    "status": "ok"
+  },
+  "models": {
+    "models": [
+      {
+        "name": "cabin-v3-clean-hybrid",
+        "model": "cabin-v3-clean-hybrid",
+        "modified_at": "",
+        "size": "",
+        "digest": "",
+        "type": "model",
+        "description": "",
+        "tags": [
+          ""
+        ],
+        "capabilities": [
+          "completion"
+        ],
+        "parameters": "",
+        "details": {
+          "parent_model": "",
+          "format": "gguf",
+          "family": "",
+          "families": [
+            ""
+          ],
+          "parameter_size": "",
+          "quantization_level": ""
+        }
+      }
+    ],
+    "object": "list",
+    "data": [
+      {
+        "id": "cabin-v3-clean-hybrid",
+        "aliases": [
+          "cabin-v3-clean-hybrid"
+        ],
+        "tags": [],
+        "object": "model",
+        "architecture": {
+          "input_modalities": [
+            "text"
+          ],
+          "output_modalities": [
+            "text"
+          ]
+        },
+        "created": 1792229913,
+        "owned_by": "llamacpp",
+        "meta": {
+          "vocab_type": 2,
+          "n_vocab": 151936,
+          "n_ctx": 4096,
+          "n_ctx_train": 32768,
+          "n_embd": 1536,
+          "n_params": 1543714304,
+          "size": 1640622080,
+          "ftype": "Q8_0"
+        }
+      }
+    ]
+  },
+  "calibration_first": {
+    "schema_version": 1,
+    "kind": "avd_virtual_clock_calibration",
+    "created_utc": "2026-10-17T17:35:16.0875537+08:00",
+    "tablet_serial": "emulator-5554",
+    "tablet_avd": "center_tab",
+    "phone_serial": "emulator-5556",
+    "phone_avd": "dash_phone",
+    "requested_phone_ahead_ms": 500,
+    "allowed_phone_ahead_ms": [
+      0,
+      2000
+    ],
+    "pc_clock_changed": false,
+    "tablet_clock_changed": false,
+    "automatic_time_settings_changed": false,
+    "phone_set_attempted": true,
+    "status": "failed",
+    "reference_sample": {
+      "Serial": "emulator-5554",
+      "DeviceUnixMs": 1792229714785,
+      "HostBeforeUnixMs": 1792229716107,
+      "HostAfterUnixMs": 1792229716220,
+      "HostMidpointUnixMs": 1792229716163.5,
+      "QueryDurationMs": 113
+    },
+    "tablet_minus_host_midpoint_ms": -1378.5,
+    "set_request_host_unix_ms": 1792229719894,
+    "requested_phone_unix_ms": 1792229719016,
+    "set_exit_code": 0,
+    "set_output": "",
+    "set_error_output": "",
+    "tablet_verification_sample": {
+      "Serial": "emulator-5554",
+      "DeviceUnixMs": 1792229719790,
+      "HostBeforeUnixMs": 1792229721087,
+      "HostAfterUnixMs": 1792229721268,
+      "HostMidpointUnixMs": 1792229721177.5,
+      "QueryDurationMs": 181
+    },
+    "phone_verification_sample": {
+      "Serial": "emulator-5556",
+      "DeviceUnixMs": 1792229719372,
+      "HostBeforeUnixMs": 1792229721268,
+      "HostAfterUnixMs": 1792229721431,
+      "HostMidpointUnixMs": 1792229721349.5,
+      "QueryDurationMs": 163
+    },
+    "verification": {
+      "PhoneAheadEstimateMs": -590,
+      "SamplingUncertaintyMs": 172,
+      "LowerBoundMs": -762,
+      "UpperBoundMs": -418,
+      "WithinBounds": false
+    },
+    "error": "Phone/tablet virtual-clock difference was outside the verified 0..2000 ms interval after query-latency adjustment (estimate -590 ms, uncertainty 172 ms).",
+    "completed_utc": "2026-10-17T17:35:21.5484044+08:00"
+  },
+  "calibration_retry": {
+    "schema_version": 1,
+    "kind": "avd_virtual_clock_calibration",
+    "created_utc": "2026-10-17T17:36:59.1465118+08:00",
+    "tablet_serial": "emulator-5554",
+    "tablet_avd": "center_tab",
+    "phone_serial": "emulator-5556",
+    "phone_avd": "dash_phone",
+    "requested_phone_ahead_ms": 500,
+    "allowed_phone_ahead_ms": [
+      0,
+      2000
+    ],
+    "pc_clock_changed": false,
+    "tablet_clock_changed": false,
+    "automatic_time_settings_changed": false,
+    "phone_set_attempted": true,
+    "status": "verified",
+    "reference_sample": {
+      "Serial": "emulator-5554",
+      "DeviceUnixMs": 1792229817941,
+      "HostBeforeUnixMs": 1792229819151,
+      "HostAfterUnixMs": 1792229819298,
+      "HostMidpointUnixMs": 1792229819224.5,
+      "QueryDurationMs": 147
+    },
+    "tablet_minus_host_midpoint_ms": -1283.5,
+    "set_request_host_unix_ms": 1792229822930,
+    "requested_phone_unix_ms": 1792229822146,
+    "set_exit_code": 0,
+    "set_output": "",
+    "set_error_output": "",
+    "tablet_verification_sample": {
+      "Serial": "emulator-5554",
+      "DeviceUnixMs": 1792229821812,
+      "HostBeforeUnixMs": 1792229823088,
+      "HostAfterUnixMs": 1792229823168,
+      "HostMidpointUnixMs": 1792229823128.0,
+      "QueryDurationMs": 80
+    },
+    "phone_verification_sample": {
+      "Serial": "emulator-5556",
+      "DeviceUnixMs": 1792229822332,
+      "HostBeforeUnixMs": 1792229823168,
+      "HostAfterUnixMs": 1792229823279,
+      "HostMidpointUnixMs": 1792229823223.5,
+      "QueryDurationMs": 111
+    },
+    "verification": {
+      "PhoneAheadEstimateMs": 424.5,
+      "SamplingUncertaintyMs": 95.5,
+      "LowerBoundMs": 329.0,
+      "UpperBoundMs": 520.0,
+      "WithinBounds": true
+    },
+    "completed_utc": "2026-10-17T17:37:03.2867097+08:00"
+  },
+  "status_file": "pc-resumed-ready.json",
+  "tablet_serial": "emulator-5554",
+  "phone_serial": "emulator-5556",
+  "current_task": "idle new in-memory session",
+  "earlier_UI_acceptance_preserved_separately": true,
+  "full_install_launcher_pass_log": "launcher-final.log",
+  "restart_mode": "Coordination SkipInstall",
+  "skip_install_does_not_verify_apk_again": true,
+  "safety_freshness_relaxed": false,
+  "warning": "Cold boot initial emulator-clock alignment failed closed; rerun passed. Not a clean-start reliability claim."
+}

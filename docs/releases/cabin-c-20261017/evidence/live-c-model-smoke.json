@@ -1,0 +1,890 @@
+{
+  "type": "C_real_model_controller_integration_not_UI_or_user_study",
+  "started_at_utc": "2026-10-17T09:01:26.314294Z",
+  "ended_at_utc": "2026-10-17T09:01:28.314252Z",
+  "passed": true,
+  "failure": null,
+  "model": "cabin-v3-clean-hybrid",
+  "signals": "deterministic privileged host simulator, no DMS or actual takeover sensing",
+  "participants": 0,
+  "physical_S9": false,
+  "real_vehicle": false,
+  "UI_tested_here": false,
+  "checks": [
+    {
+      "description": "pinned V3 alias is ready",
+      "passed": true
+    },
+    {
+      "description": "A real model parses initial request",
+      "passed": true
+    },
+    {
+      "description": "A supports all three proposed semantic settings",
+      "passed": true
+    },
+    {
+      "description": "A has no actuation before confirmation",
+      "passed": true
+    },
+    {
+      "description": "A driver pairs",
+      "passed": true
+    },
+    {
+      "description": "A explicit confirmation admitted",
+      "passed": true
+    },
+    {
+      "description": "A mock actual final 2/4/5",
+      "passed": true
+    },
+    {
+      "description": "A complete structured ACK has cabin identity",
+      "passed": true
+    },
+    {
+      "description": "active-driving profile replacement denied",
+      "passed": true
+    },
+    {
+      "description": "clean parked profile replacement admitted",
+      "passed": true
+    },
+    {
+      "description": "new B session cleared pairing and lease",
+      "passed": true
+    },
+    {
+      "description": "B same sentence really parsed again",
+      "passed": true
+    },
+    {
+      "description": "B retains unsupported fan instead of dropping it",
+      "passed": true
+    },
+    {
+      "description": "B driver pairs in its own session",
+      "passed": true
+    },
+    {
+      "description": "B unsupported confirmation refused at backend",
+      "passed": true
+    },
+    {
+      "description": "B cannot switch profile while candidate exists",
+      "passed": true
+    },
+    {
+      "description": "B grants only current-task revision rights",
+      "passed": true
+    },
+    {
+      "description": "two distinct attention blockers are active",
+      "passed": true
+    },
+    {
+      "description": "old epoch confirm refused",
+      "passed": true
+    },
+    {
+      "description": "new epoch confirm also refused while blocked",
+      "passed": true
+    },
+    {
+      "description": "direct controller cannot bypass policy authority",
+      "passed": true
+    },
+    {
+      "description": "validly authorized passenger revises using actual V3 while blocked",
+      "passed": true
+    },
+    {
+      "description": "only fan removed, media/nav intent retained",
+      "passed": true
+    },
+    {
+      "description": "repair while blocked did not actuate",
+      "passed": true
+    },
+    {
+      "description": "clearing one blocker does not clear the other",
+      "passed": true
+    },
+    {
+      "description": "all clear retains request and requires explicit resume",
+      "passed": true
+    },
+    {
+      "description": "ordinary confirm cannot silently resume",
+      "passed": true
+    },
+    {
+      "description": "old task revision cannot resume",
+      "passed": true
+    },
+    {
+      "description": "latest explicit resume confirmation admitted",
+      "passed": true
+    },
+    {
+      "description": "B mock final 3/4/5 and exactly one execution",
+      "passed": true
+    },
+    {
+      "description": "B ACK has only approved media/nav, no fan command",
+      "passed": true
+    },
+    {
+      "description": "repeat resume does not execute again",
+      "passed": true
+    },
+    {
+      "description": "all three actual model traces retained raw, no semantic guard substitution",
+      "passed": true
+    }
+  ],
+  "snapshots": {
+    "A_proposed": {
+      "task": {
+        "task_id": "repair_1792227686334196_1",
+        "revision": 1,
+        "phase": "awaitingConfirmation",
+        "pending": {
+          "rearFan": "decrease",
+          "mediaVolume": "decrease",
+          "navVolume": "keep"
+        },
+        "clarification": null,
+        "unresolved_text": null,
+        "result": null,
+        "error": null,
+        "patch_source": "local"
+      },
+      "cabin_context": {
+        "cabin_session_id": "cabin_1792227686316301_1",
+        "profile_id": "fictional-cabin-a",
+        "profile_revision": 1,
+        "attention_epoch": 3,
+        "profile": {
+          "id": "fictional-cabin-a",
+          "revision": 1,
+          "label": "模擬座艙 A",
+          "fictional": true,
+          "simulated": true,
+          "supported": [
+            "rearFan",
+            "mediaVolume",
+            "navVolume"
+          ],
+          "readable": [
+            "rearFan",
+            "mediaVolume",
+            "navVolume"
+          ],
+          "scales": {
+            "rearFan": {
+              "min": 0,
+              "max": 7
+            },
+            "mediaVolume": {
+              "min": 0,
+              "max": 10
+            },
+            "navVolume": {
+              "min": 0,
+              "max": 10
+            }
+          }
+        },
+        "attention": {
+          "epoch": 3,
+          "phase": "clear",
+          "mode": "manual",
+          "blockers": [],
+          "simulated": true,
+          "source_ttl_ms": 3000,
+          "sources": {
+            "driving-context": {
+              "source_session": "cabin_1792227686316301_1-driving",
+              "sequence": 7,
+              "episode_id": "baseline-mode",
+              "known": true,
+              "active": false,
+              "age_ms": 215
+            },
+            "cockpit-safety": {
+              "source_session": "cabin_1792227686316301_1-safety",
+              "sequence": 8,
+              "episode_id": "baseline-alert",
+              "known": true,
+              "active": false,
+              "age_ms": 215
+            }
+          }
+        },
+        "capability": {
+          "task_id": "repair_1792227686334196_1",
+          "revision": 1,
+          "ready": true,
+          "unsupported": {}
+        },
+        "can_grant": true,
+        "can_confirm": true,
+        "can_resume_confirm": false,
+        "requires_resume": false
+      },
+      "actuator_executions": 0
+    },
+    "A_completed": {
+      "task": {
+        "task_id": "repair_1792227686334196_1",
+        "revision": 1,
+        "phase": "completed",
+        "pending": {
+          "rearFan": "decrease",
+          "mediaVolume": "decrease",
+          "navVolume": "keep"
+        },
+        "clarification": null,
+        "unresolved_text": null,
+        "result": {
+          "success": true,
+          "message": "模擬控制已完成；未連接真實車輛。",
+          "simulated": true,
+          "state": {
+            "rearFan": 2,
+            "mediaVolume": 4,
+            "navVolume": 5
+          },
+          "execution_context": {
+            "cabin_session_id": "cabin_1792227686316301_1",
+            "profile_id": "fictional-cabin-a",
+            "profile_revision": 1
+          },
+          "items": {
+            "rearFan": {
+              "before": 3,
+              "after": 2,
+              "action": "decrease",
+              "success": true
+            },
+            "mediaVolume": {
+              "before": 5,
+              "after": 4,
+              "action": "decrease",
+              "success": true
+            },
+            "navVolume": {
+              "before": 5,
+              "after": 5,
+              "action": "keep",
+              "success": true
+            }
+          }
+        },
+        "error": null
+      },
+      "cabin_context": {
+        "cabin_session_id": "cabin_1792227686316301_1",
+        "profile_id": "fictional-cabin-a",
+        "profile_revision": 1,
+        "attention_epoch": 3,
+        "profile": {
+          "id": "fictional-cabin-a",
+          "revision": 1,
+          "label": "模擬座艙 A",
+          "fictional": true,
+          "simulated": true,
+          "supported": [
+            "rearFan",
+            "mediaVolume",
+            "navVolume"
+          ],
+          "readable": [
+            "rearFan",
+            "mediaVolume",
+            "navVolume"
+          ],
+          "scales": {
+            "rearFan": {
+              "min": 0,
+              "max": 7
+            },
+            "mediaVolume": {
+              "min": 0,
+              "max": 10
+            },
+            "navVolume": {
+              "min": 0,
+              "max": 10
+            }
+          }
+        },
+        "attention": {
+          "epoch": 3,
+          "phase": "clear",
+          "mode": "manual",
+          "blockers": [],
+          "simulated": true,
+          "source_ttl_ms": 3000,
+          "sources": {
+            "driving-context": {
+              "source_session": "cabin_1792227686316301_1-driving",
+              "sequence": 7,
+              "episode_id": "baseline-mode",
+              "known": true,
+              "active": false,
+              "age_ms": 224
+            },
+            "cockpit-safety": {
+              "source_session": "cabin_1792227686316301_1-safety",
+              "sequence": 8,
+              "episode_id": "baseline-alert",
+              "known": true,
+              "active": false,
+              "age_ms": 224
+            }
+          }
+        },
+        "capability": {
+          "task_id": "repair_1792227686334196_1",
+          "revision": 1,
+          "ready": true,
+          "unsupported": {}
+        },
+        "can_grant": true,
+        "can_confirm": false,
+        "can_resume_confirm": false,
+        "requires_resume": false
+      },
+      "actuator_executions": 1
+    },
+    "B_blocked_capability": {
+      "task": {
+        "task_id": "repair_1792227688051639_2",
+        "revision": 1,
+        "phase": "awaitingConfirmation",
+        "pending": {
+          "rearFan": "decrease",
+          "mediaVolume": "decrease",
+          "navVolume": "keep"
+        },
+        "clarification": null,
+        "unresolved_text": null,
+        "result": null,
+        "error": null,
+        "patch_source": "local"
+      },
+      "cabin_context": {
+        "cabin_session_id": "cabin_1792227688051639_2",
+        "profile_id": "fictional-cabin-b",
+        "profile_revision": 1,
+        "attention_epoch": 7,
+        "profile": {
+          "id": "fictional-cabin-b",
+          "revision": 1,
+          "label": "模擬座艙 B",
+          "fictional": true,
+          "simulated": true,
+          "supported": [
+            "mediaVolume",
+            "navVolume"
+          ],
+          "readable": [
+            "mediaVolume",
+            "navVolume"
+          ],
+          "scales": {
+            "mediaVolume": {
+              "min": 0,
+              "max": 10
+            },
+            "navVolume": {
+              "min": 0,
+              "max": 10
+            }
+          }
+        },
+        "attention": {
+          "epoch": 7,
+          "phase": "clear",
+          "mode": "manual",
+          "blockers": [],
+          "simulated": true,
+          "source_ttl_ms": 3000,
+          "sources": {
+            "driving-context": {
+              "source_session": "cabin_1792227688051639_2-driving",
+              "sequence": 9,
+              "episode_id": "baseline-mode",
+              "known": true,
+              "active": false,
+              "age_ms": 149
+            },
+            "cockpit-safety": {
+              "source_session": "cabin_1792227688051639_2-safety",
+              "sequence": 10,
+              "episode_id": "baseline-alert",
+              "known": true,
+              "active": false,
+              "age_ms": 149
+            }
+          }
+        },
+        "capability": {
+          "task_id": "repair_1792227688051639_2",
+          "revision": 1,
+          "ready": false,
+          "unsupported": {
+            "rearFan": "本模擬座艙未提供後座風量控制介面"
+          }
+        },
+        "can_grant": true,
+        "can_confirm": false,
+        "can_resume_confirm": false,
+        "requires_resume": false
+      },
+      "actuator_executions": 0
+    },
+    "B_two_attention_blockers": {
+      "task": {
+        "task_id": "repair_1792227688051639_2",
+        "revision": 1,
+        "phase": "awaitingConfirmation",
+        "pending": {
+          "rearFan": "decrease",
+          "mediaVolume": "decrease",
+          "navVolume": "keep"
+        },
+        "clarification": null,
+        "unresolved_text": null,
+        "result": null,
+        "error": null,
+        "patch_source": "local"
+      },
+      "cabin_context": {
+        "cabin_session_id": "cabin_1792227688051639_2",
+        "profile_id": "fictional-cabin-b",
+        "profile_revision": 1,
+        "attention_epoch": 9,
+        "profile": {
+          "id": "fictional-cabin-b",
+          "revision": 1,
+          "label": "模擬座艙 B",
+          "fictional": true,
+          "simulated": true,
+          "supported": [
+            "mediaVolume",
+            "navVolume"
+          ],
+          "readable": [
+            "mediaVolume",
+            "navVolume"
+          ],
+          "scales": {
+            "mediaVolume": {
+              "min": 0,
+              "max": 10
+            },
+            "navVolume": {
+              "min": 0,
+              "max": 10
+            }
+          }
+        },
+        "attention": {
+          "epoch": 9,
+          "phase": "blocked",
+          "mode": "handoverRequested",
+          "blockers": [
+            "handover_requested",
+            "priority_alert"
+          ],
+          "simulated": true,
+          "source_ttl_ms": 3000,
+          "sources": {
+            "driving-context": {
+              "source_session": "cabin_1792227688051639_2-driving",
+              "sequence": 11,
+              "episode_id": "handover-demo-1",
+              "known": true,
+              "active": true,
+              "age_ms": 0
+            },
+            "cockpit-safety": {
+              "source_session": "cabin_1792227688051639_2-safety",
+              "sequence": 12,
+              "episode_id": "blindspot-demo-1",
+              "known": true,
+              "active": true,
+              "age_ms": 0
+            }
+          }
+        },
+        "capability": {
+          "task_id": "repair_1792227688051639_2",
+          "revision": 1,
+          "ready": false,
+          "unsupported": {
+            "rearFan": "本模擬座艙未提供後座風量控制介面"
+          }
+        },
+        "can_grant": false,
+        "can_confirm": false,
+        "can_resume_confirm": false,
+        "requires_resume": false
+      },
+      "actuator_executions": 0
+    },
+    "B_revised_during_block": {
+      "task": {
+        "task_id": "repair_1792227688051639_2",
+        "revision": 2,
+        "phase": "awaitingConfirmation",
+        "pending": {
+          "mediaVolume": "decrease",
+          "navVolume": "keep"
+        },
+        "clarification": null,
+        "unresolved_text": null,
+        "result": null,
+        "error": null,
+        "patch_source": "local"
+      },
+      "cabin_context": {
+        "cabin_session_id": "cabin_1792227688051639_2",
+        "profile_id": "fictional-cabin-b",
+        "profile_revision": 1,
+        "attention_epoch": 9,
+        "profile": {
+          "id": "fictional-cabin-b",
+          "revision": 1,
+          "label": "模擬座艙 B",
+          "fictional": true,
+          "simulated": true,
+          "supported": [
+            "mediaVolume",
+            "navVolume"
+          ],
+          "readable": [
+            "mediaVolume",
+            "navVolume"
+          ],
+          "scales": {
+            "mediaVolume": {
+              "min": 0,
+              "max": 10
+            },
+            "navVolume": {
+              "min": 0,
+              "max": 10
+            }
+          }
+        },
+        "attention": {
+          "epoch": 9,
+          "phase": "blocked",
+          "mode": "handoverRequested",
+          "blockers": [
+            "handover_requested",
+            "priority_alert"
+          ],
+          "simulated": true,
+          "source_ttl_ms": 3000,
+          "sources": {
+            "driving-context": {
+              "source_session": "cabin_1792227688051639_2-driving",
+              "sequence": 11,
+              "episode_id": "handover-demo-1",
+              "known": true,
+              "active": true,
+              "age_ms": 104
+            },
+            "cockpit-safety": {
+              "source_session": "cabin_1792227688051639_2-safety",
+              "sequence": 12,
+              "episode_id": "blindspot-demo-1",
+              "known": true,
+              "active": true,
+              "age_ms": 104
+            }
+          }
+        },
+        "capability": {
+          "task_id": "repair_1792227688051639_2",
+          "revision": 2,
+          "ready": true,
+          "unsupported": {}
+        },
+        "can_grant": false,
+        "can_confirm": false,
+        "can_resume_confirm": false,
+        "requires_resume": false
+      },
+      "actuator_executions": 0
+    },
+    "B_resume_required": {
+      "task": {
+        "task_id": "repair_1792227688051639_2",
+        "revision": 2,
+        "phase": "awaitingConfirmation",
+        "pending": {
+          "mediaVolume": "decrease",
+          "navVolume": "keep"
+        },
+        "clarification": null,
+        "unresolved_text": null,
+        "result": null,
+        "error": null,
+        "patch_source": "local"
+      },
+      "cabin_context": {
+        "cabin_session_id": "cabin_1792227688051639_2",
+        "profile_id": "fictional-cabin-b",
+        "profile_revision": 1,
+        "attention_epoch": 11,
+        "profile": {
+          "id": "fictional-cabin-b",
+          "revision": 1,
+          "label": "模擬座艙 B",
+          "fictional": true,
+          "simulated": true,
+          "supported": [
+            "mediaVolume",
+            "navVolume"
+          ],
+          "readable": [
+            "mediaVolume",
+            "navVolume"
+          ],
+          "scales": {
+            "mediaVolume": {
+              "min": 0,
+              "max": 10
+            },
+            "navVolume": {
+              "min": 0,
+              "max": 10
+            }
+          }
+        },
+        "attention": {
+          "epoch": 11,
+          "phase": "resume_required",
+          "mode": "manual",
+          "blockers": [],
+          "simulated": true,
+          "source_ttl_ms": 3000,
+          "sources": {
+            "driving-context": {
+              "source_session": "cabin_1792227688051639_2-driving",
+              "sequence": 15,
+              "episode_id": "handover-demo-1",
+              "known": true,
+              "active": false,
+              "age_ms": 0
+            },
+            "cockpit-safety": {
+              "source_session": "cabin_1792227688051639_2-safety",
+              "sequence": 16,
+              "episode_id": "blindspot-demo-1",
+              "known": true,
+              "active": false,
+              "age_ms": 0
+            }
+          }
+        },
+        "capability": {
+          "task_id": "repair_1792227688051639_2",
+          "revision": 2,
+          "ready": true,
+          "unsupported": {}
+        },
+        "can_grant": true,
+        "can_confirm": false,
+        "can_resume_confirm": true,
+        "requires_resume": true
+      },
+      "actuator_executions": 0
+    },
+    "B_completed": {
+      "task": {
+        "task_id": "repair_1792227688051639_2",
+        "revision": 2,
+        "phase": "completed",
+        "pending": {
+          "mediaVolume": "decrease",
+          "navVolume": "keep"
+        },
+        "clarification": null,
+        "unresolved_text": null,
+        "result": {
+          "success": true,
+          "message": "模擬控制已完成；未連接真實車輛。",
+          "simulated": true,
+          "state": {
+            "rearFan": 3,
+            "mediaVolume": 4,
+            "navVolume": 5
+          },
+          "execution_context": {
+            "cabin_session_id": "cabin_1792227688051639_2",
+            "profile_id": "fictional-cabin-b",
+            "profile_revision": 1
+          },
+          "items": {
+            "mediaVolume": {
+              "before": 5,
+              "after": 4,
+              "action": "decrease",
+              "success": true
+            },
+            "navVolume": {
+              "before": 5,
+              "after": 5,
+              "action": "keep",
+              "success": true
+            }
+          }
+        },
+        "error": null
+      },
+      "cabin_context": {
+        "cabin_session_id": "cabin_1792227688051639_2",
+        "profile_id": "fictional-cabin-b",
+        "profile_revision": 1,
+        "attention_epoch": 12,
+        "profile": {
+          "id": "fictional-cabin-b",
+          "revision": 1,
+          "label": "模擬座艙 B",
+          "fictional": true,
+          "simulated": true,
+          "supported": [
+            "mediaVolume",
+            "navVolume"
+          ],
+          "readable": [
+            "mediaVolume",
+            "navVolume"
+          ],
+          "scales": {
+            "mediaVolume": {
+              "min": 0,
+              "max": 10
+            },
+            "navVolume": {
+              "min": 0,
+              "max": 10
+            }
+          }
+        },
+        "attention": {
+          "epoch": 12,
+          "phase": "clear",
+          "mode": "manual",
+          "blockers": [],
+          "simulated": true,
+          "source_ttl_ms": 3000,
+          "sources": {
+            "driving-context": {
+              "source_session": "cabin_1792227688051639_2-driving",
+              "sequence": 15,
+              "episode_id": "handover-demo-1",
+              "known": true,
+              "active": false,
+              "age_ms": 1
+            },
+            "cockpit-safety": {
+              "source_session": "cabin_1792227688051639_2-safety",
+              "sequence": 16,
+              "episode_id": "blindspot-demo-1",
+              "known": true,
+              "active": false,
+              "age_ms": 0
+            }
+          }
+        },
+        "capability": {
+          "task_id": "repair_1792227688051639_2",
+          "revision": 2,
+          "ready": true,
+          "unsupported": {}
+        },
+        "can_grant": true,
+        "can_confirm": false,
+        "can_resume_confirm": false,
+        "requires_resume": false
+      },
+      "actuator_executions": 1
+    }
+  },
+  "model_traces": [
+    {
+      "input": {
+        "pending": {},
+        "unresolved_text": null,
+        "clarification": null,
+        "user_text": "後座風小一點，音樂也小一點，導航提示不要變。"
+      },
+      "raw": "{\"changes\":{\"rearFan\":\"decrease\",\"mediaVolume\":\"decrease\",\"navVolume\":\"keep\"},\"clarification\":null}",
+      "path": "qwen",
+      "elapsed_ms": 1702,
+      "error": null,
+      "guard_actions": [],
+      "final_patch": {
+        "changes": {
+          "rearFan": "decrease",
+          "mediaVolume": "decrease",
+          "navVolume": "keep"
+        },
+        "clarification": null
+      }
+    },
+    {
+      "input": {
+        "pending": {},
+        "unresolved_text": null,
+        "clarification": null,
+        "user_text": "後座風小一點，音樂也小一點，導航提示不要變。"
+      },
+      "raw": "{\"changes\":{\"rearFan\":\"decrease\",\"mediaVolume\":\"decrease\",\"navVolume\":\"keep\"},\"clarification\":null}",
+      "path": "qwen",
+      "elapsed_ms": 149,
+      "error": null,
+      "guard_actions": [],
+      "final_patch": {
+        "changes": {
+          "rearFan": "decrease",
+          "mediaVolume": "decrease",
+          "navVolume": "keep"
+        },
+        "clarification": null
+      }
+    },
+    {
+      "input": {
+        "pending": {
+          "rearFan": "decrease",
+          "mediaVolume": "decrease",
+          "navVolume": "keep"
+        },
+        "unresolved_text": null,
+        "clarification": null,
+        "user_text": "風量先不用改，其餘照剛剛。"
+      },
+      "raw": "{\"changes\":{\"rearFan\":\"remove\"},\"clarification\":null}",
+      "path": "qwen",
+      "elapsed_ms": 103,
+      "error": null,
+      "guard_actions": [],
+      "final_patch": {
+        "changes": {
+          "rearFan": "remove"
+        },
+        "clarification": null
+      }
+    }
+  ]
+}

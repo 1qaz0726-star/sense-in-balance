@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "id": "qwen25-15b-v3-clean-q8-c2048",
+  "label": "V3 實驗 Qwen2.5-1.5B Q8 / 2048",
+  "source": "Qwen/Qwen2.5-1.5B-Instruct + clean V3 LoRA; local litert-torch0.9.4 conversion",
+  "source_revision": "cabin-v3-clean-android-user;adapter_sha256=3477069956dda08ddfe3b5110f96834a6b0ab4d5528899d0ad010f6798efa42a",
+  "sha256": "abc57627d87b529328541e5a2194209fab641f3aa17de3c2a31376cc39de9702",
+  "bytes": 1823647040,
+  "model_type": "qwen",
+  "file_type": "task",
+  "format": "litertlm"
+}

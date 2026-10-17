@@ -1,0 +1,169 @@
+{
+  "checked_at": "2026-10-17",
+  "timezone": "Asia/Taipei",
+  "role": "Agency Research Synthesist / independent Reality Checker",
+  "scope": "Focused source refresh for C implementation and 14-16 slide team briefing; not systematic review or original participant research",
+  "search_boundary": {
+    "languages": ["English", "Traditional Chinese"],
+    "channels": ["primary official websites", "AAA Foundation study summaries", "ACL original paper abstract", "locally verified official V12 PDF"],
+    "years": "2014-2026",
+    "excluded_claims": ["market first", "competitor lacks undocumented features", "measured safety benefit", "real-vehicle cross-brand control", "OEM willingness to pay", "participant pain frequency"],
+    "participants_this_team": 0
+  },
+  "sources": [
+    {
+      "id": "S1",
+      "title": "2026 AI 座艙感知與視覺化 Hackathon 競賽簡章 V12",
+      "url": "https://drive.google.com/file/d/1wxcwjrPwAra1gn2sYfBP-u82aEiI33cB/view",
+      "official_site": "https://brandstudio.tnlmedia.com/2026/AMSC4SAHACKATHON/index.html",
+      "publisher": "III/4SA and AUO Mobility Solutions Corporation",
+      "tier": "A: official contest requirements",
+      "method": "Read stored source JSON page text, recalculated PDF SHA-256; current official site HTTP200 and team shortlist entry present. web.open site returned InternalError, so no claim of successful web parser retrieval.",
+      "local_path": "C:/Users/USER/Desktop/友達/official_docs/競賽簡章_V12_官網取得_20261017.pdf",
+      "sha256": "cdb5b8aaa2fcd8655d866bbfbc9d0124e6018e4fc3d94b30a6260f7368959b70",
+      "claims": {
+        "weights": {"innovation": 25, "technical_completion_feasibility": 35, "ux_ui": 20, "business": 10, "pitch": 10},
+        "theme_preservation": "No replacement of main proposal or substantively different work after shortlist; printed12/real14.",
+        "android": "Android14+, target34, standard portable HMI, no vendor SDK dependence; printed5/real7.",
+        "live_e2e": "At least one live operable input-AI-HMI scenario; recording cannot fully replace; printed6/real8.",
+        "technical_weight": "Offline raw technical item score times1.15, Hybrid times1.30, capped at item maximum; only if implemented and verified.",
+        "hybrid": "Offline useful core and online cloud enhancement plus disconnection/reconnection demo; printed5-6/real7-8.",
+        "pc": "PC may be AI Box; real AAOS hardware not compulsory; printed8/real10.",
+        "multi_display": "Recommended core, no compulsory match to platform layout; printed3/real5.",
+        "disclosure": "AI/third-party/material/training-source/old-vs-new work disclosure; printed6/14/18-19."
+      },
+      "limits": "Final-stage logistics, pitch time and exact theme interpretation still subject to organizer announcements. This is rules evidence, not assurance of an award."
+    },
+    {
+      "id": "S2",
+      "title": "Visual and Cognitive Demands of Using In-Vehicle Information Systems",
+      "url": "https://aaafoundation.org/research/visual-cognitive-demands-using-vehicle-information-systems/",
+      "publisher": "AAA Foundation for Traffic Safety; University of Utah research",
+      "date": "2017-09",
+      "tier": "B: primary research institution summary",
+      "method": "120 licensed drivers21-36;30 model-year2017 cars;24 drivers per vehicle, many drove several cars;2-mile low-traffic residential road25mph;phone/text/radio/navigation tasks.",
+      "verified_claim": "23/30 vehicles generated high or very high overall demand in selected tasks;7 moderate;voice lower visual demand but longer interaction.",
+      "limits": "Historic cars, young drivers, selected tasks and supervised setting;not our fan/media correction latency,2026 Tesla performance,daily pain frequency or intervention benefit.",
+      "status": "Reopened primary page and methodology 2026-10-17"
+    },
+    {
+      "id": "S3",
+      "title": "In-Vehicle Infotainment Systems Especially Distracting to Older Drivers",
+      "url": "https://newsroom.aaa.com/2019/07/vehicle-infotainment-systems-especially-distracting-older-drivers/",
+      "publisher": "AAA",
+      "date": "2019-07-25",
+      "tier": "B: study sponsor original summary",
+      "method": "128 participants in ages21-36 and55-75;six2018 cars;voice,touchscreen and other controls;calling,text,radio,navigation tasks.",
+      "verified_claim": "Audio entertainment completion18.0s younger/25.4s older;navigation31.4s/40.0s.",
+      "limits": "Historical specific tasks,not our baseline or measured improvement;sample results do not generalize all older people.",
+      "status": "Reopened data table and sample summary 2026-10-17"
+    },
+    {
+      "id": "S4",
+      "title": "How Users React to Proactive Voice Assistant Behavior While Driving",
+      "url": "https://aclanthology.org/2020.lrec-1.61/",
+      "authors": "Maria Schmidt, Wolfgang Minker, Steffen Werner",
+      "date": "2020-05",
+      "tier": "B: original peer-reviewed conference abstract",
+      "method": "42 participants;Wizard-of-Oz driving simulator;traffic-density variation;six in-car use cases;proactive and non-proactive conditions;questionnaires and reactions.",
+      "verified_claim": "73.8% proactive suggestion acceptance;82.5% driving-related use cases;proactive and non-proactive rated similarly positive.",
+      "limits": "Counterevidence against always-quiet assumption;small simulator study,not naturalistic driving or this product efficacy.",
+      "status": "Reopened original abstract 2026-10-17"
+    },
+    {
+      "id": "S5",
+      "title": "Model Y Owner's Manual: Media / Grok (Beta)",
+      "url": "https://www.tesla.com/ownersmanual/modely/en_us/GUID-7A85FB6B-9DF6-4C55-A2F9-793207E48E9D.html",
+      "publisher": "Tesla",
+      "date": "Current page checked2026-10-17;not version-pinned",
+      "tier": "C: manufacturer official capability documentation",
+      "verified_claim": "Grok needs Premium Connectivity orWi-Fi;Assistant personality supports navigation,phone,media,controls search and common vehicle controls such as climate;existing voice commands remain.",
+      "limits": "Depends on configuration,region and software;US manual not proof on user's car. No inference that undocumented C recovery/capability negotiation is absent.",
+      "status": "Reopened live official manual 2026-10-17"
+    },
+    {
+      "id": "S6",
+      "title": "Model Y Owner's Manual: Touchscreen / Rear Touchscreen",
+      "url": "https://www.tesla.com/ownersmanual/modely/en_us/GUID-518C51C1-E9AC-4A68-AE12-07F4FF8C881E.html",
+      "publisher": "Tesla",
+      "date": "Current page checked2026-10-17;not version-pinned",
+      "tier": "C: manufacturer official capability documentation",
+      "verified_claim": "Rear fan/media/volume;rear media+volume affect front cabin;front rear-display remote+lock;Joe Mode reduces noncritical chimes.",
+      "limits": "No universal rear-song-selection claim;configuration/region/software differences. No hands-on superiority test.",
+      "status": "Reopened live manual including rear screen andJoeMode 2026-10-17"
+    },
+    {
+      "id": "S7",
+      "title": "AUO Mobility Solutions Set to Showcase at CES2026:Building the Formula for Future Mobility",
+      "url": "https://www.auo.com/en-global/New_Archive/detail/News_Archive_Product_20260105",
+      "publisher": "AUO",
+      "date": "2026-01-05",
+      "tier": "C: official showcase/product announcement",
+      "verified_claim": "DriverAwareHUD AI driver attention monitoring;Horizon unified instrument/CID/PID displays;CabConnect CDC andAI modules;multi-device controls,personalized temperature/airflow/lighting.",
+      "limits": "Vendor showcase claims,not universal production or independent performance;no evidence thatAUO lacks proposed feature,agrees partnership or intends to buy.",
+      "status": "Reopened official announcement2026-10-17"
+    },
+    {
+      "id": "S8",
+      "title": "Cerence xUI Hybrid Agentic AI Platform for Automotive UX",
+      "url": "https://www.cerence.com/platforms/cerence-xui",
+      "publisher": "Cerence AI",
+      "date": "Current page checked2026-10-17",
+      "tier": "C: official platform claims",
+      "verified_claim": "Cloud+edge,offline,multi-turn,multi-seat,agents andOEM integration described.",
+      "limits": "Not independent benchmark or proof of direct same-flow overlap;establishes broad platform concepts are prior art.",
+      "status": "Reopened official page2026-10-17"
+    },
+    {
+      "id": "S9",
+      "title": "A Multimodal In-Car Dialogue System That Tracks The Driver's Attention",
+      "url": "https://clp.ling.uni-potsdam.de/bibliography/Kousidis-2014-1/",
+      "publisher": "Original authors/Potsdam",
+      "date": "2014",
+      "tier": "B: original-author research summary",
+      "verified_claim": "Prior in-car attention-aware speech interruption/resumption and user-controlled resumption reported in two experiments.",
+      "limits": "Only prior-art claim;no sample size or effect size asserted;not equivalent to vehicle task transaction semantics.",
+      "status": "Reopened original-author page2026-10-17"
+    },
+    {
+      "id": "S10",
+      "title": "Car User Experience Restrictions rules",
+      "url": "https://source.android.com/docs/automotive/driver_distraction/car_uxr",
+      "publisher": "AOSP",
+      "tier": "A: official platform technical documentation",
+      "verified_claim": "Driving-state UX restriction mappings,multiple display restrictions and named modes are existing platform concepts.",
+      "limits": "Not permission for ordinary app to override vehicle UX policy;API revision guards needed;our mock states not measured human attention.",
+      "status": "Reopened official documentation2026-10-17"
+    },
+    {
+      "id": "S11",
+      "title": "CarPropertyManager",
+      "url": "https://developer.android.com/reference/android/car/hardware/property/CarPropertyManager",
+      "publisher": "Android Developers",
+      "tier": "A: official API",
+      "verified_claim": "getPropertyList returns supported properties application can access;isPropertyAvailable checks present availability;unsupported,permission denied and unavailable states exist.",
+      "limits": "Missing property in list can reflect lacking permissions,not physical absence. Latest methods needversion checks onAPI34.",
+      "status": "Reopened official API2026-10-17"
+    },
+    {
+      "id": "S12",
+      "title": "Car permissions",
+      "url": "https://developer.android.com/reference/android/car/Car#PERMISSION_CONTROL_CAR_CLIMATE",
+      "publisher": "Android Developers",
+      "tier": "A: official API",
+      "verified_claim": "CarHVAC andCarAudioManager volume control permissions includeSignature|Privileged.",
+      "limits": "Ordinary tablet installation andUSB debugging do not grant OEM car controls;authorized OEM/AAOS integration required.",
+      "status": "Reopened official permission table2026-10-17"
+    }
+  ],
+  "unknowns": ["actual formal finalist slide/architecture submitted", "organizer exact theme-change interpretation", "pitch duration and final-stage logistics", "S9 C workflow performance", "actual OEM capability adapters", "human attention/task benefit", "buyer willingness to pay"],
+  "claim_status": {
+    "market_first": false,
+    "competitor_absence_proven": false,
+    "real_vehicle_cross_model_validation": false,
+    "DMS_implemented": false,
+    "autonomous_driving_control": false,
+    "measured_user_safety_improvement": false,
+    "C_implementation_pass": "not assessed in this research phase"
+  }
+}

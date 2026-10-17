@@ -1,5 +1,7 @@
 # 感知有度｜智慧座艙雙屏原型
 
+**C 完整交付版**：[GitHub Release：APK、Android／PC 模型與完整資料](https://github.com/1qaz0726-star/sense-in-balance/releases/tag/v1.2.0-cabin-c-demo-20261017) · [隊友交接／跨電腦啟動指南](docs/releases/cabin-c-20261017/README.md) · [17 頁 PDF 簡報](docs/releases/cabin-c-20261017/cabin-c-team-brief-20261017.pdf) · [與同學 Hybrid 分支比較](https://github.com/1qaz0726-star/sense-in-balance/compare/shikai/hybrid-cloud...codex/c-attention-coordination)。工程 215 項測試通過，S9 實機仍待驗證；原版與既有分支保留。
+
 ## 2026-10-17：C 注意力模式與跨車型任務協調
 
 保留原「該說才說」與 V3 整合，新增兩份虛構座艙能力設定、優先事件中保留需求、解除後確認最新版，以及後端能力／模式／版本與完整模擬回報檢查。車型 B 未提供獨立後座風量介面時，先保留並明示受限，乘客明確取消該項後才可確認其他設定。這是兩份模擬能力的協調驗證，沒有接真車或自動駕駛。

@@ -1,0 +1,217 @@
+00:00 +0: loading C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/cabin_cockpit_source_test.dart
+00:00 +0: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/cabin_cockpit_source_test.dart: safety event updates policy synchronously without waiting for heartbeat
+00:00 +1: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/cabin_cockpit_source_test.dart: re-reading a stopped source cannot extend its original TTL
+00:00 +2: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/cabin_cockpit_source_test.dart: delayed initial event retains original age rather than restarting TTL
+00:00 +3: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/cabin_cockpit_source_test.dart: clone with new ID and old timestamp cannot manufacture a fresh source
+00:00 +4: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/cabin_coordination_ui_test.dart: pending result speech cannot outlive a new task
+00:00 +5: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/cabin_coordination_ui_test.dart: pending result speech cannot outlive a new task
+00:00 +6: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/cabin_coordination_ui_test.dart: pending result speech cannot outlive a new task
+00:00 +7: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/cabin_coordination_ui_test.dart: pending result speech cannot outlive a new task
+00:00 +8: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/cabin_coordination_ui_test.dart: pending result speech cannot outlive a new task
+00:00 +9: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/cabin_coordination_ui_test.dart: pending result speech cannot outlive a new task
+00:00 +10: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/cabin_coordination_ui_test.dart: pending result speech cannot outlive a new task
+00:00 +11: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/cabin_coordination_ui_test.dart: pending result speech cannot outlive a new task
+00:00 +12: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/cabin_coordination_ui_test.dart: pending result speech cannot outlive a new task
+00:00 +13: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/cabin_coordination_ui_test.dart: pending result speech cannot outlive a new task
+00:00 +14: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/cabin_coordination_ui_test.dart: pending result speech cannot outlive a new task
+00:00 +15: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/cabin_coordination_ui_test.dart: pending result speech cannot outlive a new task
+00:00 +16: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/cabin_coordination_ui_test.dart: pending result speech cannot outlive a new task
+00:00 +17: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/cabin_coordination_ui_test.dart: pending result speech cannot outlive a new task
+00:00 +18: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/cabin_coordination_ui_test.dart: pending result speech cannot outlive a new task
+00:00 +19: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/cabin_coordination_ui_test.dart: pending result speech cannot outlive a new task
+00:00 +20: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/cabin_coordination_ui_test.dart: pending result speech cannot outlive a new task
+00:00 +21: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/cabin_coordination_ui_test.dart: pending result speech cannot outlive a new task
+00:00 +22: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/cabin_coordination_ui_test.dart: pending result speech cannot outlive a new task
+00:01 +23: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/cabin_coordination_ui_test.dart: pending result speech cannot outlive a new task
+00:01 +24: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/cabin_coordination_ui_test.dart: pending result speech cannot outlive a new task
+00:01 +25: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/cabin_coordination_ui_test.dart: pending result speech cannot outlive a new task
+00:01 +26: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/cabin_coordination_ui_test.dart: pending result speech cannot outlive a new task
+00:01 +27: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/cabin_coordination_ui_test.dart: pending result speech cannot outlive a new task
+00:01 +28: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/cabin_coordination_ui_test.dart: pending result speech cannot outlive a new task
+00:01 +29: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/cabin_coordination_ui_test.dart: pending result speech cannot outlive a new task
+00:01 +30: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/cabin_coordination_ui_test.dart: pending result speech cannot outlive a new task
+00:01 +31: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/cabin_coordination_ui_test.dart: pending result speech cannot outlive a new task
+00:01 +32: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/cabin_coordination_ui_test.dart: pending result speech cannot outlive a new task
+00:01 +33: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/cabin_coordination_ui_test.dart: pending result speech cannot outlive a new task
+00:01 +34: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/cabin_coordination_ui_test.dart: pending result speech cannot outlive a new task
+00:01 +35: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/cockpit_instruments_test.dart: shared instruments paint complete events across tablet and phone viewports
+00:01 +36: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/cockpit_instruments_test.dart: shared instruments paint complete events across tablet and phone viewports
+00:01 +37: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/cockpit_instruments_test.dart: shared instruments paint complete events across tablet and phone viewports
+00:01 +38: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/cockpit_instruments_test.dart: shared instruments paint complete events across tablet and phone viewports
+00:01 +39: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/cockpit_instruments_test.dart: shared instruments paint complete events across tablet and phone viewports
+00:01 +40: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/cockpit_instruments_test.dart: shared instruments paint complete events across tablet and phone viewports
+00:01 +41: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/cockpit_instruments_test.dart: shared instruments paint complete events across tablet and phone viewports
+00:01 +42: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/cockpit_instruments_test.dart: shared instruments paint complete events across tablet and phone viewports
+00:01 +43: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/cockpit_instruments_test.dart: shared instruments paint complete events across tablet and phone viewports
+00:01 +44: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/cockpit_instruments_test.dart: shared instruments paint complete events across tablet and phone viewports
+00:01 +45: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/cockpit_instruments_test.dart: shared instruments paint complete events across tablet and phone viewports
+00:01 +46: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/cockpit_instruments_test.dart: shared instruments paint complete events across tablet and phone viewports
+00:01 +47: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/cockpit_instruments_test.dart: shared instruments paint complete events across tablet and phone viewports
+00:01 +48: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/cockpit_instruments_test.dart: shared instruments paint complete events across tablet and phone viewports
+00:01 +49: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/cockpit_instruments_test.dart: shared instruments paint complete events across tablet and phone viewports
+00:01 +50: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/cockpit_instruments_test.dart: shared instruments paint complete events across tablet and phone viewports
+00:01 +51: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/c_hub_transport_test.dart: schema2 socket cannot bypass capability, attention, revision or session
+00:01 +52: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/cabin_coordination_ui_test.dart: attention strip has identical geometry for all states
+00:01 +53: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/cockpit_instruments_test.dart: alert transitions keep instrument and gauge geometry fixed
+00:02 +54: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/cockpit_instruments_test.dart: alert transitions keep instrument and gauge geometry fixed
+00:02 +55: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/cabin_coordination_ui_test.dart: priority heartbeat does not repeatedly switch views and release never auto-resumes
+00:04 +56: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:04 +57: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:04 +58: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:04 +59: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:04 +60: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:04 +61: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:04 +62: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:04 +63: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:05 +64: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:05 +65: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:05 +66: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:05 +67: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:05 +68: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:05 +69: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:05 +70: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:05 +71: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:05 +72: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:05 +73: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:05 +74: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:05 +75: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:05 +76: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:05 +77: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:05 +78: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:05 +79: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:05 +80: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:05 +81: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:05 +82: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:05 +83: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:05 +84: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:05 +85: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:05 +86: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:05 +87: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:05 +88: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:05 +89: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:05 +90: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:05 +91: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:05 +92: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:05 +93: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:05 +94: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:05 +95: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:05 +96: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:05 +97: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:05 +98: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:05 +99: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:05 +100: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:05 +101: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:05 +102: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:06 +103: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:06 +104: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:06 +105: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:06 +106: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:06 +107: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:06 +108: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:06 +109: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:06 +110: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:06 +111: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:06 +112: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:06 +113: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:06 +114: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:06 +115: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:06 +116: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:06 +117: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:06 +118: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:06 +119: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:06 +120: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:06 +121: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:06 +122: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:06 +123: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:06 +124: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:06 +125: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:06 +126: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:06 +127: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:06 +128: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:06 +129: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:06 +130: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:06 +131: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:06 +132: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:06 +133: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:06 +134: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:06 +135: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:06 +136: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:06 +137: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:06 +138: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:06 +139: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:06 +140: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:06 +141: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:06 +142: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:06 +143: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +144: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +145: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +146: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +147: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +148: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +149: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +150: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +151: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +152: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +153: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +154: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +155: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +156: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +157: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +158: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +159: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +160: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +161: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +162: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +163: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +164: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +165: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +166: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +167: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +168: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +169: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +170: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +171: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +172: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +173: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +174: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +175: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +176: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +177: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +178: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +179: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +180: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +181: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +182: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +183: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +184: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +185: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +186: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +187: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +188: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +189: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +190: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +191: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +192: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +193: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +194: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +195: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +196: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +197: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +198: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +199: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +200: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +201: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +202: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +203: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +204: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +205: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +206: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +207: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:07 +208: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:08 +209: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:08 +210: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 四個情境經 WebSocket 送到儀表端
+00:30 +211: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 網頁中控：事件、狀態、指令、網頁檔案
+00:34 +212: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 嵌入模式不占用原埠號，仍有心跳，停止後不再發事件
+00:37 +213: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 清除未出現與已出現的左右警示，不會被延遲計時器復活
+00:40 +214: C:/Users/USER/codex-dev/sense-in-balance-hybrid-cloud/app/cockpit_hmi/test/hub_test.dart: 啟動尚未完成就停止，不會留下伺服器或復活舊警示
+00:41 +215: All tests passed!

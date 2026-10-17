@@ -1,0 +1,28 @@
+{
+  "CreatedAt": "2026-10-17T17:17:41.8256864+08:00",
+  "Mode": "Driver",
+  "Apk": "C:\\Users\\USER\\codex-dev\\sense-in-balance-hybrid-cloud\\.local\\cabin-c\\cabin-c-driver-arm64-x64.apk",
+  "Bytes": 254074206,
+  "Sha256": "900135c325b72a1869939fcf2f89f9c2f5a00a41f83455fb0c9f3ffccd03dc7c",
+  "Flutter": "3.35.2",
+  "VersionName": "1.2.0",
+  "VersionCode": 2026101702,
+  "Coordination": true,
+  "Arguments": [
+    "build",
+    "apk",
+    "--release",
+    "--no-pub",
+    "--build-name=1.2.0",
+    "--build-number=2026101702",
+    "--dart-define=HYBRID_V3_DEMO=true",
+    "--dart-define=CABIN_COORDINATION=true",
+    "--target-platform",
+    "android-arm64,android-x64",
+    "-t",
+    "lib/main_repair_monitor.dart",
+    "--dart-define=REPAIR_MONITOR_URL=ws://10.0.2.2:8767/repair"
+  ],
+  "Installed": false,
+  "S9Tested": false
+}

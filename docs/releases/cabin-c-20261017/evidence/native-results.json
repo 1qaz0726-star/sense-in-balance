@@ -1,0 +1,138 @@
+{
+  "artifact_type": "native_c_deployment_and_true_ui_trial",
+  "recorded_at_utc": "2026-10-17T09:25:30.431195+00:00",
+  "overall": "candidate_and_attention_retention_passed_after_one_normal_app_restart",
+  "source_commit": "010a0a4",
+  "app": {
+    "package": "com.auohack.cockpit_hmi.coordination",
+    "uid": 10193,
+    "version_name": "1.2.0",
+    "version_code": 2026101702,
+    "apk_bytes": 256239390,
+    "apk_sha256": "0c237ddab571e6ac200c75d1ab734429a2ebbd6e901f8d545b65ad2d2275cf85"
+  },
+  "environment": {
+    "avd": "hybrid_v3_eval",
+    "serial": "emulator-5560",
+    "api_level": 34,
+    "abi": "x86_64",
+    "requested_cpu_cores": 4,
+    "effective_cpu_cores": 1,
+    "cpu_limitation": "WHPX x86 virtualization limitation; not S9 performance",
+    "memory_mb": 4096,
+    "headless": true,
+    "gpu_mode": "host",
+    "userdata_preserved": true,
+    "old_hybrid_package_and_model_preserved": true,
+    "other_avds_untouched": true,
+    "model_staging_used_adb_root_only": true,
+    "runtime_adb_uid": 2000
+  },
+  "model": {
+    "id": "qwen25-15b-v3-clean-q8-c2048",
+    "bytes": 1823647040,
+    "sha256": "abc57627d87b529328541e5a2194209fab641f3aa17de3c2a31376cc39de9702",
+    "source_guest_package": "com.auohack.cockpit_hmi.hybridv3",
+    "destination_guest_path": "/storage/emulated/0/Android/data/com.auohack.cockpit_hmi.coordination/files/models/qwen25-15b-v3-clean-q8-c2048/qwen25-15b-v3-clean-q8-c2048.litertlm",
+    "destination_owner": "10193:1078",
+    "pc_inference_used": false,
+    "model_or_timeout_or_backend_selection_modified": false
+  },
+  "startup_attempts": [
+    {
+      "attempt": 1,
+      "result": "failed_before_model_ready",
+      "gpu_error": "OpenCL library unavailable",
+      "cpu_error": "warmup returned no text; native cancel/close then Preface unsupported log",
+      "root_cause_confirmed": false,
+      "possible_cause": "Shared asynchronous response channel during GPU to CPU transition; inference only, not diagnosed",
+      "evidence": [
+        "native-first-start-full.log",
+        "status-load-progress.json",
+        "native-first-start-error.png"
+      ]
+    },
+    {
+      "attempt": 2,
+      "result": "ready_after_normal_force_stop_and_restart",
+      "backend": "CPU",
+      "reported_load_seconds": 13.2,
+      "reported_warmup_seconds": 26.5,
+      "gpu_error": "OpenCL library unavailable; original CPU fallback used",
+      "evidence": [
+        "readiness-second-progress.jsonl",
+        "native-second-start-full.log",
+        "native-ready.png"
+      ]
+    }
+  ],
+  "ui_model_trial": {
+    "count": 1,
+    "input_method": "existing UI sample-prefill button then explicit submit button",
+    "text": "後座風小一點，音樂也小一點，導航提示不要變。",
+    "elapsed_ms": 33750,
+    "backend": "CPU",
+    "raw": "{\"changes\":{\"rearFan\":\"decrease\",\"mediaVolume\":\"decrease\",\"navVolume\":\"keep\"},\"clarification\":null}",
+    "guard_actions": [],
+    "final_patch": {
+      "changes": {
+        "rearFan": "decrease",
+        "mediaVolume": "decrease",
+        "navVolume": "keep"
+      },
+      "clarification": null
+    },
+    "task_id": "repair_1792228942864769_1",
+    "task_revision": 1,
+    "phase": "awaitingConfirmation",
+    "actuator_receipt": null,
+    "mock_call_count": "not exposed by runtime status; do not claim directly measured executeCount",
+    "observed_cabin_values": {
+      "rearFan": 3,
+      "mediaVolume": 5,
+      "navVolume": 5
+    }
+  },
+  "native_attention_ui_trial": {
+    "method": "host UI simulation sheet handoverRequested then manual; no socket injection",
+    "blocked_epoch": 4,
+    "resumed_epoch": 5,
+    "final_attention": "resume_required",
+    "paired_driver": false,
+    "execution_confirmed": false,
+    "evidence": [
+      "status-handover-blocked.json",
+      "status-resume-final.json",
+      "native-resume-final.png"
+    ]
+  },
+  "checks": {
+    "exact_model_bytes_and_sha_verified_source_and_new_slot": true,
+    "new_package_model_directories_and_files_owned_by_app_uid_10193": true,
+    "normal_nonroot_app_runtime": true,
+    "true_ui_prefill_then_submit_no_response_fixture": true,
+    "raw_output_correct_all_three_settings_no_guard_rewrite": true,
+    "schema2_profile_a_runtime": true,
+    "same_task_and_revision_retained_through_handover_and_release": true,
+    "priority_event_blocks_new_confirm": true,
+    "release_requires_explicit_resume_no_auto_execution_receipt": true,
+    "cabin_values_unchanged_and_result_remains_null": true
+  },
+  "system_ui_startup_issue": {
+    "system_ui_anr_observed": true,
+    "action": "Wait, then recovered",
+    "not_the_product_package_crashing": true,
+    "evidence": [
+      "native-loading.png",
+      "system-ui-anr.log"
+    ]
+  },
+  "limits": [
+    "Initial C native startup failed; one normal restart succeeded. This is not a clean-start reliability pass.",
+    "One model utterance only; no measured overall accuracy gain.",
+    "Native A candidate plus attention retain/release only; not native A/B complete paired-driver actuation.",
+    "No S9 or physical phone connected; no S9 GPU, latency or stability claim.",
+    "Mode source and all vehicle controls are simulated; no real vehicle or safety validation.",
+    "No ASR, cloud credentials, user participants or formal blind test verified here."
+  ]
+}

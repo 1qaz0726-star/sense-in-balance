@@ -1,0 +1,36 @@
+﻿Cockpit Hybrid V3 integration, 2026-10-17
+
+Base: Qwen/Qwen2.5-1.5B-Instruct, revision 989aa7980e4cf806f80c7fef2b1adb7bc71aa306
+Upstream: https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct
+Modified 2026-10-16/17 with response-only QLoRA on limited synthetic cockpit intent/repair data.
+Existing adapter merged into BF16 and exported to Q8 LiteRT-LM / Q8_0 GGUF.
+No new training during this integration. No pruning or teacher-logit distillation claimed.
+1.5B is parameter count, not a promise of 1.5GB storage.
+
+Android model: model/model.litertlm, 1,823,647,040 bytes
+SHA256: abc57627d87b529328541e5a2194209fab641f3aa17de3c2a31376cc39de9702
+Adapter SHA256: 3477069956dda08ddfe3b5110f96834a6b0ab4d5528899d0ad010f6798efa42a
+Android model ID: qwen25-15b-v3-clean-q8-c2048
+PC GGUF SHA256: 91793812b9ad0fab54a85119fa7cb1b16d9129be446b5bbe63c8340e6d13fbd1
+PC alias: cabin-v3-clean-hybrid
+
+Scope: proposed JSON changes for rearFan, mediaVolume, navVolume and partial revisions.
+Host validates proposals, retains state, enforces driver authority, and performs simulated controls.
+V3 is not used for free-form proactive speech; templates retain that function.
+This dedicated Native APK defaults to the V3 slot (SLM_PREFER_CABIN_V3=true).
+Original model can be selected separately; original App, original repo and original model are preserved.
+The historical model card describes the older App/default/timeout and is retained separately.
+
+This integration: 161 engineering tests passed; static analysis passed.
+PC: actual two-emulator UI, real local V3, driver authorization/revision/confirmation/mock ACK passed.
+Observed two seen UI inputs: 281ms, 209ms. These are not accuracy or device benchmarks.
+Android native: clean x64 emulator, effective 1 vCPU, GPU unavailable then CPU fallback;
+one true model UI input produced correct three-slot raw JSON in 30,596ms, awaiting confirmation.
+Native end-to-end dual-device control was not tested. Physical S9 was not available.
+Old emulator failure: XNNPACK weight cache insertion aborted under storage pressure; retained in evidence.
+
+Historical engineering data and D02 wrong-refusal limitation remain in MODEL_CARD_原模型歷史紀錄.txt.
+No universal improvement, new blind test, real vehicle, autonomous driving, cloud ASR or physical S9 claim.
+These modified weights are not an official Qwen release.
+License: licenses/Qwen-Apache-2.0-LICENSE.txt and preserved upstream README.
+This model notice does not relicense App or third-party code/dependencies.

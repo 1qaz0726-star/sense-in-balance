@@ -1,0 +1,88 @@
+{
+  "created_at": "2026-10-17T09:39:50.416869+00:00",
+  "scope": "C1 simulated cabin attention and capability coordination",
+  "baseline_commit": "2ff3fe3176de66809ff45a8052c726544588aab4",
+  "repository_head": "6309c9c1a15553ff065d339fb5e92af7e93c59c0",
+  "apk_app_source_commit": "010a0a4",
+  "branch": "codex/c-attention-coordination",
+  "github_pushed_this_turn": false,
+  "original_repository_and_versions_preserved": true,
+  "tests": {
+    "passed": 215,
+    "total": 215,
+    "analyze": "No issues found",
+    "controller_real_v3_checks": 33
+  },
+  "pc_ui": {
+    "cases": [
+      "A complete",
+      "parked new B session",
+      "B unsupported fan",
+      "paired driver repair grant",
+      "handover blocking",
+      "real model partial revision",
+      "blindspot and handover blockers",
+      "release requires resume",
+      "explicit latest revision confirmation and per-item mock ACK"
+    ],
+    "model_display_seconds": [
+      8.1,
+      4.6,
+      2.5
+    ],
+    "times_are_rounded_ui_values": true,
+    "not_accuracy_or_performance_benchmark": true,
+    "review": "evidence/pc-ui-acceptance-review.json"
+  },
+  "native": {
+    "status": "candidate_and_attention_retention_passed_after_one_normal_app_restart",
+    "first_start_failed": true,
+    "normal_restart_succeeded": true,
+    "real_ui_candidate_ms": 33750,
+    "backend": "CPU",
+    "scope": "A candidate and attention retention only; no full native paired A/B actuation"
+  },
+  "post_pause_restart": {
+    "first_clock_calibration_failed_closed": true,
+    "ordinary_retry_passed": true,
+    "safety_freshness_relaxed": false,
+    "read_only_ready_and_screens_verified": true,
+    "evidence": "evidence/pc-resumed-runtime-receipt.json",
+    "not_clean_start_reliability_certification": true
+  },
+  "apk": [
+    {
+      "file": "app/cabin-c-native-arm64-x64.apk",
+      "bytes": 256239390,
+      "sha256": "0c237ddab571e6ac200c75d1ab734429a2ebbd6e901f8d545b65ad2d2275cf85"
+    },
+    {
+      "file": "app/cabin-c-pc-x64.apk",
+      "bytes": 239216272,
+      "sha256": "bd154cc155ebe925ce644f18cd7536b127b162993bb851ea8d790e94e63b606d"
+    },
+    {
+      "file": "app/cabin-c-driver-arm64-x64.apk",
+      "bytes": 254074206,
+      "sha256": "900135c325b72a1869939fcf2f89f9c2f5a00a41f83455fb0c9f3ffccd03dc7c"
+    }
+  ],
+  "android_model": {
+    "bytes": 1823647040,
+    "sha256": "abc57627d87b529328541e5a2194209fab641f3aa17de3c2a31376cc39de9702",
+    "storage": "existing verified file"
+  },
+  "pdf": {
+    "path": "簡報/C方案_注意力模式與跨車型協調_實作與展示簡報_20261017.pdf",
+    "sha256": "3fed9f06bc3150167fe879d993d8373d4c4aa8ddb44a6923ca127d36566e1fa9",
+    "qa_receipt": "evidence/deck-qa-receipt.json"
+  },
+  "limits": [
+    "No physical S9 or phone tested",
+    "No actual vehicle/ADAS/autonomous control",
+    "No users or sealed blind test",
+    "No ASR/cloud credential/whole-machine network-disconnect validation",
+    "C uses existing V3 LoRA model; no new training or weight pruning in this change",
+    "Internal Mock receipt state is not a real vehicle readback"
+  ]
+}

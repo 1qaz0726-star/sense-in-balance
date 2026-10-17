@@ -1,0 +1,29 @@
+{
+  "CreatedAt": "2026-10-17T17:15:48.2605126+08:00",
+  "Mode": "Native",
+  "Apk": "C:\\Users\\USER\\codex-dev\\sense-in-balance-hybrid-cloud\\.local\\cabin-c\\cabin-c-native-arm64-x64.apk",
+  "Bytes": 256239390,
+  "Sha256": "0c237ddab571e6ac200c75d1ab734429a2ebbd6e901f8d545b65ad2d2275cf85",
+  "Flutter": "3.35.2",
+  "VersionName": "1.2.0",
+  "VersionCode": 2026101702,
+  "Coordination": true,
+  "Arguments": [
+    "build",
+    "apk",
+    "--release",
+    "--no-pub",
+    "--build-name=1.2.0",
+    "--build-number=2026101702",
+    "--dart-define=HYBRID_V3_DEMO=true",
+    "--dart-define=CABIN_COORDINATION=true",
+    "--target-platform",
+    "android-arm64,android-x64",
+    "-t",
+    "lib/main_repair.dart",
+    "--dart-define=SLM_PREFER_CABIN_V3=true",
+    "--dart-define=REPAIR_EVAL_LOG=true"
+  ],
+  "Installed": false,
+  "S9Tested": false
+}

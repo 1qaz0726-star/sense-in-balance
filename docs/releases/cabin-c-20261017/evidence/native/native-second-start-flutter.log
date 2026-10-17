@@ -1,0 +1,25 @@
+--------- beginning of main
+10-17 17:20:21.186  5347  5377 I flutter : [IMPORTANT:flutter/shell/platform/android/android_context_gl_impeller.cc(104)] Using the Impeller rendering backend (OpenGLES).
+10-17 17:20:45.288  5347  5347 I flutter : ℹ️  Model already installed: qwen25-15b-v3-clean-q8-c2048.litertlm (skipping download)
+10-17 17:20:45.289  5347  5347 I flutter : ✅ Set active inference model: qwen25-15b-v3-clean-q8-c2048
+10-17 17:20:45.289  5347  5347 I flutter : ✅ Inference model installed and set as active: qwen25-15b-v3-clean-q8-c2048
+10-17 17:20:45.289  5347  5347 I flutter : UnifiedModelManager initialized successfully
+10-17 17:20:45.290  5347  5347 I flutter : UnifiedModelManager: Model qwen25-15b-v3-clean-q8-c2048 installed: true
+10-17 17:20:45.290  5347  5347 I flutter : UnifiedModelManager: Model qwen25-15b-v3-clean-q8-c2048 installed: true
+10-17 17:20:45.291  5347  5347 I flutter : Using unified model file: /storage/emulated/0/Android/data/com.auohack.cockpit_hmi.coordination/files/models/qwen25-15b-v3-clean-q8-c2048/qwen25-15b-v3-clean-q8-c2048.litertlm
+10-17 17:20:57.764  5347  5347 I flutter : [MobileSession.addQueryChunk] modelType=ModelType.qwen, fileType=ModelFileType.task, msgType=MessageType.text
+10-17 17:20:57.764  5347  5347 I flutter : [transformToChatPrompt] modelType=ModelType.qwen, fileType=ModelFileType.task, messageType=MessageType.text, isUser=true
+10-17 17:20:57.764  5347  5347 I flutter : [transformToChatPrompt] Using _formatToolResponseContent, result length=1111
+10-17 17:20:57.764  5347  5347 I flutter : [MobileSession.addQueryChunk] finalPrompt length=1111
+10-17 17:21:15.474  5347  5347 I flutter : UnifiedModelManager: Model qwen25-15b-v3-clean-q8-c2048 installed: true
+10-17 17:21:15.475  5347  5347 I flutter : UnifiedModelManager: Model qwen25-15b-v3-clean-q8-c2048 installed: true
+10-17 17:21:15.475  5347  5347 I flutter : Using unified model file: /storage/emulated/0/Android/data/com.auohack.cockpit_hmi.coordination/files/models/qwen25-15b-v3-clean-q8-c2048/qwen25-15b-v3-clean-q8-c2048.litertlm
+10-17 17:21:16.209  5347  5347 I flutter : [MobileSession.addQueryChunk] modelType=ModelType.qwen, fileType=ModelFileType.task, msgType=MessageType.text
+10-17 17:21:16.209  5347  5347 I flutter : [transformToChatPrompt] modelType=ModelType.qwen, fileType=ModelFileType.task, messageType=MessageType.text, isUser=true
+10-17 17:21:16.209  5347  5347 I flutter : [transformToChatPrompt] Using _formatToolResponseContent, result length=1111
+10-17 17:21:16.209  5347  5347 I flutter : [MobileSession.addQueryChunk] finalPrompt length=1111
+10-17 17:22:22.871  5347  5347 I flutter : [MobileSession.addQueryChunk] modelType=ModelType.qwen, fileType=ModelFileType.task, msgType=MessageType.text
+10-17 17:22:22.871  5347  5347 I flutter : [transformToChatPrompt] modelType=ModelType.qwen, fileType=ModelFileType.task, messageType=MessageType.text, isUser=true
+10-17 17:22:22.871  5347  5347 I flutter : [transformToChatPrompt] Using _formatToolResponseContent, result length=1124
+10-17 17:22:22.871  5347  5347 I flutter : [MobileSession.addQueryChunk] finalPrompt length=1124
+10-17 17:22:56.615  5347  5347 I flutter : REPAIR_EVAL {"input":{"pending":{},"unresolved_text":null,"clarification":null,"user_text":"後座風小一點，音樂也小一點，導航提示不要變。"},"raw":"{\"changes\":{\"rearFan\":\"decrease\",\"mediaVolume\":\"decrease\",\"navVolume\":\"keep\"},\"clarification\":null}","path":"qwen","elapsed_ms":33750,"error":null,"guard_actions":[],"final_patch":{"changes":{"rearFan":"decrease","mediaVolume":"decrease","navVolume":"keep"},"clarification":null},"backend":"CPU","model_id":"qwen25-15b-v3-clean-q8-c2048"}

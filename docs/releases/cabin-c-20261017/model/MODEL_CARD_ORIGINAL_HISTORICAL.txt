@@ -1,0 +1,28 @@
+Cockpit SLM V3: experimental Android deployment
+
+Base: Qwen/Qwen2.5-1.5B-Instruct
+Base revision: 989aa7980e4cf806f80c7fef2b1adb7bc71aa306
+Upstream: https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct
+Modification notice: The base model was locally modified on 2026-10-16/17 through response-only QLoRA fine-tuning
+on synthetic, limited cockpit intent/repair data; the adapter was merged into BF16 weights and converted to
+Q8 LiteRT-LM with a 2048 cache profile. These are modified weights, not an official Qwen release.
+No pruning or parameter deletion was performed. No teacher-logit distillation is claimed.
+
+Scope: produce proposed JSON patches for rearFan, mediaVolume and navVolume. The host application supplies
+pending/context state, validates output, preserves state, handles driver authorization and performs mock actuation.
+This is not a general vehicle controller and is not a validated in-vehicle deployment.
+
+Model SHA256: abc57627d87b529328541e5a2194209fab641f3aa17de3c2a31376cc39de9702
+Model bytes: 1823647040
+Adapter SHA256 (adapter not included): 3477069956dda08ddfe3b5110f96834a6b0ab4d5528899d0ad010f6798efa42a
+Converter: litert-torch 0.9.4; conversion-provenance.json documents the toolchain.
+
+Evidence: controlled HF/NF4 AI-generated engineering test (120 cases, 3 runs/case): confirmed pass 32 -> 53;
+definite fail 87 -> 24; unresolved semantic classification 1 -> 43. Confirmed pass is a lower bound, not complete accuracy.
+No human participants or completed sealed human blind test. No claim of universal improvement or lower model size.
+Native known-case tests did not meet the student adoption gate. D02 remains a wrong refusal. GUI timed out on
+a single-vCPU CPU emulator for a built-in command. Physical Tab S9 performance and compatibility are unverified.
+The App keeps the original model as the startup default and requires explicit student selection.
+
+License: see licenses/Qwen-Apache-2.0-LICENSE.txt and the preserved upstream README. This notice concerns the
+modified model; it does not relicense the App, reference source, or third-party dependencies.

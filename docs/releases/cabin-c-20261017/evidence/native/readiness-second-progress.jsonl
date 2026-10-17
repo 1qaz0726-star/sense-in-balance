@@ -1,0 +1,5 @@
+{"At":"2026-10-17T17:20:32.5029122+08:00","Model":"載入中…（時間依裝置而異）\n驗證並切換模型…","Phase":"idle","Attention":"clear"}
+{"At":"2026-10-17T17:20:52.5871121+08:00","Model":"載入中…（時間依裝置而異）\n載入 V3 實驗 Qwen2.5-1.5B Q8 / 2048…","Phase":"idle","Attention":"clear"}
+{"At":"2026-10-17T17:21:02.6052480+08:00","Model":"載入中…（時間依裝置而異）\nGPU 首次暖機驗證中，可能較久（回應逾時 120 秒）…","Phase":"idle","Attention":"clear"}
+{"At":"2026-10-17T17:21:22.6585018+08:00","Model":"載入中…（時間依裝置而異）\nCPU 首次暖機驗證中，可能較久（回應逾時 120 秒）…","Phase":"idle","Attention":"clear"}
+{"At":"2026-10-17T17:21:52.7340081+08:00","Model":"✅ V3 實驗 Qwen2.5-1.5B Q8 / 2048 就緒・CPU　載入 13.2 s・暖機 26.5 s・已改用 CPU（gpu: PlatformException(ERROR, Status Code: 2. Message: UNKNOWN: Can not find OpenCL library on this device, null, null)）","Phase":"idle","Attention":"clear"}
