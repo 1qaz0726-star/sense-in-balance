@@ -12,6 +12,7 @@ param(
 
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'local-sha256.ps1')
 $taskRepoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..')).TrimEnd('\')
 $taskProfile = [Environment]::GetFolderPath('UserProfile')
 $taskAsciiRepo = Join-Path $taskProfile 'codex-dev\sense-in-balance-hybrid-cloud'
@@ -147,7 +148,7 @@ try {
     $taskReceipt = [ordered]@{
         CreatedAt = (Get-Date).ToString('o'); Mode = $Mode
         Apk = $taskDestination; Bytes = (Get-Item -LiteralPath $taskDestination).Length
-        Sha256 = (Get-FileHash -LiteralPath $taskDestination -Algorithm SHA256).Hash.ToLowerInvariant()
+        Sha256 = Get-LocalSha256 -LiteralPath $taskDestination
         Flutter = '3.35.2'
         VersionName = $(if ($Coordination) { '1.2.0' } else { '1.1.0' })
         VersionCode = $(if ($Coordination) { 2026101702 } else { 2026101701 })

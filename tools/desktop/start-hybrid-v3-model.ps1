@@ -11,6 +11,7 @@ param(
 
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'local-sha256.ps1')
 $taskRepoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 $taskModelAlias = 'cabin-v3-clean-hybrid'
 $taskExpectedHash = '91793812b9ad0fab54a85119fa7cb1b16d9129be446b5bbe63c8340e6d13fbd1'
@@ -36,7 +37,7 @@ if ($ModelPath -match '[^\x00-\x7F]') {
     throw 'This runtime requires an ASCII model path. Use the existing verified codex-dev junction.'
 }
 if ((Get-Item -LiteralPath $ModelPath).Length -ne $taskExpectedBytes -or
-    (Get-FileHash -LiteralPath $ModelPath -Algorithm SHA256).Hash.ToLowerInvariant() -cne $taskExpectedHash) {
+    (Get-LocalSha256 -LiteralPath $ModelPath) -cne $taskExpectedHash) {
     throw 'V3 model size or SHA256 mismatch. No process was started or changed.'
 }
 

@@ -27,6 +27,7 @@ if ([string]::IsNullOrWhiteSpace($taskScriptRoot)) {
 if ([string]::IsNullOrWhiteSpace($taskScriptRoot)) {
     throw '無法取得助手檔案所在目錄；請以 -File 或 .cmd 執行本檔。'
 }
+. (Join-Path $taskScriptRoot 'local-sha256.ps1')
 $taskWorkspaceRoot = [System.IO.Path]::GetFullPath((Join-Path $taskScriptRoot '..\..')).TrimEnd('\')
 # aapt cannot reliably open APKs through this checkout's Chinese path. Use only
 # the dedicated ASCII junction after proving it refers to THIS exact checkout.
@@ -629,7 +630,7 @@ try {
         throw '缺少 Windows Get-NetTCPConnection，無法安全檢查連接埠。'
     }
     if ((Get-Item -LiteralPath $ModelPath).Length -ne $taskExpectedModelBytes -or
-        (Get-FileHash -LiteralPath $ModelPath -Algorithm SHA256).Hash.ToLowerInvariant() -cne $taskExpectedModelHash) {
+        (Get-LocalSha256 -LiteralPath $ModelPath) -cne $taskExpectedModelHash) {
         throw 'V3 GGUF byte length or SHA256 mismatch. No emulator, App or model was started or changed.'
     }
     if (-not $SkipInstall) {
