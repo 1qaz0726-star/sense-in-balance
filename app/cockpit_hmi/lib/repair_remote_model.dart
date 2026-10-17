@@ -7,25 +7,33 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 const kRepairModelUrl = String.fromEnvironment('REPAIR_MODEL_URL');
+// A trained model is opt-in at build time. Existing builds keep their model ID.
+const kRepairModelId = String.fromEnvironment(
+  'REPAIR_MODEL_ID',
+  defaultValue: 'Qwen2.5-1.5B-Instruct',
+);
+const kRepairSingleUser = bool.fromEnvironment('REPAIR_MODEL_SINGLE_USER');
 
 class RemoteRepairModel extends ChangeNotifier {
   RemoteRepairModel(
     this.base, {
-    this.model = 'Qwen2.5-1.5B-Instruct',
+    this.model = kRepairModelId,
+    this.singleUserPrompt = kRepairSingleUser,
     this.timeout = const Duration(seconds: 28),
   });
 
   final Uri base;
   final String model;
+  final bool singleUserPrompt;
   final Duration timeout;
   final HttpClient _client = HttpClient();
   bool ready = false;
   bool _disposed = false;
-  String detail = '正在連接電腦上的 Qwen 1.5B…';
+  String detail = '正在連接電腦上的指定模型…';
   int? lastElapsedMs;
 
   String get status => ready
-      ? '真實 Qwen 2.5 1.5B · 電腦本地推論（GGUF Q8）'
+      ? '$model · 電腦本地推論'
             '${lastElapsedMs == null ? '' : ' · 上次 ${(lastElapsedMs! / 1000).toStringAsFixed(1)} 秒'}'
       : detail;
 
@@ -34,7 +42,7 @@ class RemoteRepairModel extends ChangeNotifier {
       final data = await _json('/v1/models');
       final models = data['data'];
       if (models is! List || !models.any((e) => e is Map && e['id'] == model)) {
-        throw const FormatException('主機未載入指定的 Qwen 1.5B');
+        throw FormatException('主機未載入指定模型：$model');
       }
       if (_disposed) return;
       ready = true;
@@ -52,15 +60,21 @@ class RemoteRepairModel extends ChangeNotifier {
     final watch = Stopwatch()..start();
     final data = await _json('/v1/chat/completions', {
       'model': model,
-      'messages': [
-        {'role': 'system', 'content': system},
-        {'role': 'user', 'content': prompt},
-      ],
+      'messages': singleUserPrompt
+          ? [
+              {'role': 'user', 'content': '$system\n\n$prompt'},
+            ]
+          : [
+              {'role': 'system', 'content': system},
+              {'role': 'user', 'content': prompt},
+            ],
       'stream': false,
       'temperature': 0,
       'seed': 42,
       'max_tokens': 256,
-      'response_format': {'type': 'json_object'},
+      // V3 learned the single-user input and natural JSON output. Do not turn
+      // constrained decoding into an unreported improvement of model quality.
+      if (!singleUserPrompt) 'response_format': {'type': 'json_object'},
     });
     final choices = data['choices'];
     if (choices is! List || choices.isEmpty || choices.first is! Map) {

@@ -125,34 +125,26 @@ class RepairParser {
           guardActions.add('pending_continuity:${setting.name}');
         }
       }
-      for (final clause in _clauses(text)) {
-        final clauseSettings = {
-          ..._namedSettings(clause),
-          ..._pendingVolumeGroup(clause, snapshot),
-        };
-        if (_negatedCancellation.hasMatch(clause)) {
+      for (final entry in _pendingCancellationIntents(text, snapshot).entries) {
+        final setting = entry.key;
+        if (entry.value == _CancellationIntent.preserve) {
           // "Do not cancel music" preserves its pending operation. Neither a
           // model echo nor the positive cancellation rule may turn it into
-          // remove/keep. A later explicit positive clause is handled normally.
-          for (final setting in clauseSettings) {
-            if (changes.remove(setting) != null) {
-              guardActions.add(
-                'negated_cancel_preserves_pending:${setting.name}',
-              );
-            }
+          // remove/keep. Only the last explicit intent for that item applies.
+          if (changes.remove(setting) != null) {
+            guardActions.add(
+              'negated_cancel_preserves_pending:${setting.name}',
+            );
           }
           continue;
         }
-        if (!_pendingCancellation.hasMatch(clause)) continue;
-        for (final setting in clauseSettings) {
-          if (snapshot.pending.containsKey(setting)) {
-            // Cancelling a pending edit is different from applying "keep".
-            // This explicit cancellation rule cannot restore an executed action.
-            if (changes[setting] != RequestedChange.remove) {
-              guardActions.add('explicit_pending_cancel:${setting.name}');
-            }
-            changes[setting] = RequestedChange.remove;
+        if (snapshot.pending.containsKey(setting)) {
+          // Cancelling a pending edit is different from applying "keep".
+          // This explicit cancellation rule cannot restore an executed action.
+          if (changes[setting] != RequestedChange.remove) {
+            guardActions.add('explicit_pending_cancel:${setting.name}');
           }
+          changes[setting] = RequestedChange.remove;
         }
       }
       final cancelAll = _isCancelAll(text, snapshot);
@@ -301,12 +293,71 @@ final _pendingCancellation = RegExp(
   r'先不用改|先不要改|先不改|不調|不调|取消|撤回|撤掉|刪掉|删掉|刪除|删除|刪|删',
 );
 final _negatedCancellation = RegExp(
-  r'(?:別|别|不要|不用|不必|不是|並非|并非|不)\s*(?:先|再)?\s*'
+  r'(?:別|别|不要|不用|不必|不是|並非|并非|不)\s*(?:要|想要|打算)?\s*(?:先|再)?\s*'
   r'(?:(?:全部|所有|全都|全|都)\s*)?(?:先|再|都)?\s*'
   r'(?:取消|撤回|撤掉|刪掉|删掉|刪除|删除|刪|删)'
   r'|(?:別|别|不要|不用|不必)\s*(?:把|將|将)[^，,。；;\n]{0,16}'
-  r'(?:取消|撤回|撤掉|刪掉|删掉|刪除|删除|刪|删)',
+  r'(?:取消|撤回|撤掉|刪掉|删掉|刪除|删除|刪|删)'
+  r'|(?:取消|撤回|撤掉)(?:的)?(?:那句|這句|这句)(?:話|话)?(?:不算|作廢|作废)',
 );
+
+enum _CancellationIntent { preserve, cancel }
+
+/// Collect before editing the patch: an earlier cancellation must not overwrite
+/// the model's later, explicit correction. Omitted targets are accepted only
+/// with a correction marker and exactly one named control in the whole request.
+/// This does not infer an operation or manufacture a positive model patch.
+Map<CabinSetting, _CancellationIntent> _pendingCancellationIntents(
+  String text,
+  RepairSnapshot snapshot,
+) {
+  final intents = <CabinSetting, _CancellationIntent>{};
+  final namedInRequest = _namedSettings(text);
+  for (final clause in text.split(RegExp(r'[，,。；;\n]|(?=而是)'))) {
+    final targets = {
+      ..._namedSettings(clause),
+      ..._pendingVolumeGroup(clause, snapshot),
+    };
+    if (_negatedCancellation.hasMatch(clause)) {
+      for (final setting in targets) {
+        intents[setting] = _CancellationIntent.preserve;
+      }
+    } else if (_pendingCancellation.hasMatch(clause)) {
+      for (final setting in targets) {
+        intents[setting] = _CancellationIntent.cancel;
+      }
+    } else if (_hasExplicitNonCancellationOperation(clause)) {
+      if (targets.isEmpty &&
+          namedInRequest.length == 1 &&
+          RegExp(
+            r'^\s*(?:請|请)?\s*(?:而是|改填|改成|改為|改为|更正為|更正为)',
+          ).hasMatch(clause)) {
+        targets.add(namedInRequest.single);
+      }
+      for (final setting in targets) {
+        intents.remove(setting);
+      }
+    }
+  }
+  return intents;
+}
+
+bool _hasExplicitNonCancellationOperation(String clause) {
+  const directions = [
+    r'降低|調小|调小|小一點|小一点|小聲一點|小声一点',
+    r'提高|調大|调大|大一點|大一点|大聲一點|大声一点',
+    r'維持原值|维持原值|保持原值|保持現在|保持现在|不變|不变|不要變|不要变',
+  ];
+  final matches = directions.where((words) => RegExp(words).hasMatch(clause));
+  if (matches.length != 1) return false;
+  // Negative requests and observations such as "too quiet" are not a new
+  // positive operation. Recognized keep phrases carry their own negation.
+  final remainder = clause.replaceAll(RegExp(directions.last), '');
+  return !RegExp(
+    r'不是|並非|并非|不要|不用|不必|別|别|不想|不能|不需要|不准|請勿|请勿|太小|太大',
+  ).hasMatch(remainder);
+}
+
 final _unsupportedSeatOrTemperature = RegExp(
   r'(?:座椅|座位|椅子)[^，,。；;\n]*(?:加熱|加热|通風|通风|按摩|角度)'
   r'|(?:後座|后座)[^，,。；;\n]*(?:加熱|加热)'

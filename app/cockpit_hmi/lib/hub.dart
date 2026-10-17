@@ -609,10 +609,10 @@ class Hub extends ChangeNotifier {
       _note('安全級 → 規則直出「$tpl」');
       return;
     }
-    if (!Slm.I.ready) {
+    if (!Slm.I.ready || !Slm.I.supportsPhrasing) {
       u.text = tpl;
       u.src = 'template';
-      _note('模型未就緒 → 模板「$tpl」');
+      _note('模型未就緒或僅供需求解析 → 模板「$tpl」');
       return;
     }
     final prompt = renderPrompt(s, d);

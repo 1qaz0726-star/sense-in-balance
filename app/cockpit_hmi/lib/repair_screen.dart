@@ -154,7 +154,7 @@ class _RepairScreenState extends State<RepairScreen> {
         },
         onTrace: const bool.fromEnvironment('REPAIR_EVAL_LOG')
             ? (trace) => debugPrint(
-                'REPAIR_EVAL ${jsonEncode({...trace, 'backend': remoteModel == null ? Slm.I.backend : 'PC GGUF Q8'})}',
+                'REPAIR_EVAL ${jsonEncode({...trace, 'backend': remoteModel == null ? Slm.I.backend : 'PC local', 'model_id': remoteModel?.model ?? Slm.I.selectedModel.id})}',
               )
             : null,
         cloud: cloudAssist,

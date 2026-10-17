@@ -1,5 +1,9 @@
 # 感知有度｜智慧座艙雙屏原型
 
+## 2026-10-17：Hybrid＋V3 本機整合版
+
+本工作分支保留同學 `shikai/hybrid-cloud@70ed02e` 的雲端理解、車主記憶與語音，接入既有座艙 V3 模型，原版分開保存。新功能範圍、模型 SHA、三種 APK 建置與尚未驗證的部分，見 [Hybrid V3 整合說明](docs/HYBRID_V3_INTEGRATION.md)。本次沒有實作 C；以下歷史驗證紀錄按原日期保留。
+
 保留原作的「該說才說」規則警示，加入「不用重講」座艙任務修復：**乘客提出候選，駕駛配對並授權，乘客只改出錯項，駕駛確認最新版本，收到逐項回執後才顯示完成。** 一台平板作乘客詳細端與本地狀態主機，另一個螢幕作駕駛端；本次 **Qwen2.5-1.5B-Instruct** 在 PC 本地執行。車速、盲點與車控均為模擬。
 
 本倉庫是 [Kinoko1412/sense-in-balance](https://github.com/Kinoko1412/sense-in-balance) 的公開 fork，從 `5ea2253` 延伸，保留原始 Git 歷史。原作團隊：**葉士愷・黃昱羲・胡馨**。原始提案、研究及 App 仍在倉庫；[原 README](docs/ORIGINAL_README.md) 另存，方便對照。

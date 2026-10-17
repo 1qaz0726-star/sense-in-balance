@@ -30,8 +30,25 @@ android {
                     String(Base64.getDecoder().decode(it), Charsets.UTF_8)
                 }.getOrNull() == "REPAIR_DESKTOP_DEMO=true"
             }
-        applicationId = if (desktopDemo) "com.auohack.cockpit_hmi.desktopdemo" else "com.auohack.cockpit_hmi"
-        manifestPlaceholders["appLabel"] = if (desktopDemo) "不用重講 PC 實測" else "座艙 HMI"
+        val hybridV3 = (project.findProperty("dart-defines") as? String)
+            .orEmpty().split(',').any {
+                runCatching {
+                    String(Base64.getDecoder().decode(it), Charsets.UTF_8)
+                }.getOrNull() == "HYBRID_V3_DEMO=true"
+            }
+        applicationId = when {
+            hybridV3 -> "com.auohack.cockpit_hmi.hybridv3"
+            desktopDemo -> "com.auohack.cockpit_hmi.desktopdemo"
+            else -> "com.auohack.cockpit_hmi"
+        }
+        manifestPlaceholders["appLabel"] = when {
+            hybridV3 -> "座艙 Hybrid V3"
+            desktopDemo -> "不用重講 PC 實測"
+            else -> "座艙 HMI"
+        }
+        // Isolated demonstration builds use local HTTP/WS between devices.
+        // Ordinary release builds keep Android's cleartext prohibition.
+        manifestPlaceholders["allowCleartext"] = hybridV3.toString()
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = 24

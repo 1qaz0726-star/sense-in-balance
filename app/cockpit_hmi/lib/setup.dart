@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import 'common.dart';
 import 'slm.dart';
+import 'slm_model_store.dart';
 
 String modelStatusText(Slm m) {
   switch (m.phase) {
@@ -16,9 +17,9 @@ String modelStatusText(Slm m) {
     case SlmPhase.present:
       return '已下載，準備載入';
     case SlmPhase.loading:
-      return '載入中…（約 10 秒）';
+      return '載入中…（時間依裝置而異）${m.detail.isEmpty ? '' : '\n${m.detail}'}';
     case SlmPhase.ready:
-      return '✅ Qwen2.5-1.5B 就緒・${m.detail}';
+      return '✅ ${m.selectedModel.label} 就緒・${m.detail}';
     case SlmPhase.error:
       return '⚠️ ${m.detail}\n（目前用模板措辭）';
   }
@@ -36,56 +37,137 @@ class ModelSetupPage extends StatelessWidget {
         listenable: Slm.I,
         builder: (context, _) {
           final m = Slm.I;
-          final busy = m.phase == SlmPhase.downloading || m.phase == SlmPhase.loading;
+          final busy = m.busy;
           return ListView(
             padding: EdgeInsets.all(s.pad),
             children: [
-              Text('中控會在平板上離線跑一個小語言模型（Qwen2.5-1.5B，約 1.6 GB），'
-                  '原模式用來措辭；「不用重講」原型用來解析需求與局部修正。\n'
-                  '確認、取消與執行結果仍由固定規則處理。\n'
-                  '模型不包在 APK 裡，第一次要下載一次，之後完全離線。',
-                  style: TextStyle(fontSize: s.cardBody, color: C.textHigh, height: 1.5)),
+              Text(
+                '中控會在平板上離線跑一個小語言模型（Qwen2.5-1.5B，檔案大小依版本而異），'
+                '原版可用於措辭；V3 專門解析「不用重講」需求與局部修正，原座艙告知會改用模板。\n'
+                '確認、取消與執行結果仍由固定規則處理。\n'
+                '模型不包在 APK 裡，第一次要下載一次，之後完全離線。',
+                style: TextStyle(
+                  fontSize: s.cardBody,
+                  color: C.textHigh,
+                  height: 1.5,
+                ),
+              ),
               SizedBox(height: s.gap),
-              Text('・建議用 Wi-Fi，平板要留 2 GB 以上空間\n'
-                  '・下載中斷了沒關係，再按一次會接著下載\n'
-                  '・如果裝過 slm_probe 測試 App，可以先把它解除安裝，釋放 1.6 GB\n'
-                  '・原座艙模式沒有模型時，以固定模板措辭\n'
-                  '・「不用重講」需要模型就緒，未就緒時不能解析需求',
-                  style: TextStyle(fontSize: s.label, color: C.textLow, height: 1.6)),
+              Text(
+                '・首次下載建議用 Wi-Fi，請預留模型與匯入暫存空間\n'
+                '・下載中斷了沒關係，再按一次會接著下載\n'
+                '・原版與實驗版分開保存，匯入不會取代原版\n'
+                '・原座艙模式沒有模型時，以固定模板措辭\n'
+                '・「不用重講」需要模型就緒，未就緒時不能解析需求',
+                style: TextStyle(
+                  fontSize: s.label,
+                  color: C.textLow,
+                  height: 1.6,
+                ),
+              ),
               SizedBox(height: s.gap * 1.5),
-              Text(modelStatusText(m),
-                  style: TextStyle(fontSize: s.cardBody, color: C.textHigh, height: 1.4)),
+              Text(
+                modelStatusText(m),
+                style: TextStyle(
+                  fontSize: s.cardBody,
+                  color: C.textHigh,
+                  height: 1.4,
+                ),
+              ),
+              SizedBox(height: s.gap),
+              FutureBuilder<List<SlmModelManifest>>(
+                future: m.installedManifests(),
+                builder: (context, snapshot) {
+                  final versions = snapshot.data;
+                  if (snapshot.hasError) {
+                    return Text('模型清單讀取失敗：${snapshot.error}');
+                  }
+                  if (versions == null) return const SizedBox.shrink();
+                  return DropdownButtonFormField<String>(
+                    key: ValueKey(m.selectedModel.id),
+                    initialValue:
+                        versions.any((v) => v.id == m.selectedModel.id)
+                        ? m.selectedModel.id
+                        : null,
+                    decoration: const InputDecoration(
+                      labelText: '本機模型版本（原版與 V3 分開保存）',
+                    ),
+                    isExpanded: true,
+                    items: [
+                      for (final version in versions)
+                        DropdownMenuItem(
+                          value: version.id,
+                          child: Text(
+                            version.label,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                    ],
+                    onChanged: busy
+                        ? null
+                        : (id) async {
+                            if (id == null ||
+                                id == m.selectedModel.id && m.ready) {
+                              return;
+                            }
+                            try {
+                              await m.selectModel(
+                                versions.singleWhere(
+                                  (version) => version.id == id,
+                                ),
+                              );
+                            } catch (_) {
+                              // The shared model status displays the validation error.
+                            }
+                          },
+                  );
+                },
+              ),
               if (m.phase == SlmPhase.downloading) ...[
                 SizedBox(height: s.gap * 0.6),
                 LinearProgressIndicator(value: m.progress),
               ],
               SizedBox(height: s.gap * 1.5),
-              Wrap(spacing: s.gap, runSpacing: s.gap, children: [
-                if (m.phase == SlmPhase.downloading)
+              Wrap(
+                spacing: s.gap,
+                runSpacing: s.gap,
+                children: [
+                  if (m.phase == SlmPhase.downloading)
+                    OutlinedButton.icon(
+                      onPressed: m.cancelDownload,
+                      icon: const Icon(Icons.pause),
+                      label: const Text('暫停下載'),
+                    )
+                  else if ((m.phase == SlmPhase.missing ||
+                          m.phase == SlmPhase.error) &&
+                      m.selectedModel.id == kOriginalSlmManifest.id)
+                    FilledButton.icon(
+                      onPressed: busy ? null : m.download,
+                      icon: const Icon(Icons.download),
+                      label: Text(m.progress > 0 ? '繼續下載' : '下載模型（1.6 GB）'),
+                    ),
+                  if (m.phase == SlmPhase.missing || m.phase == SlmPhase.error)
+                    OutlinedButton.icon(
+                      onPressed: busy ? null : m.importFile,
+                      icon: const Icon(Icons.folder_open),
+                      label: const Text('從檔案匯入 .litertlm'),
+                    ),
+                  if (m.phase == SlmPhase.error)
+                    OutlinedButton(
+                      onPressed: m.load,
+                      child: const Text('重試載入'),
+                    ),
                   OutlinedButton.icon(
-                    onPressed: m.cancelDownload,
-                    icon: const Icon(Icons.pause),
-                    label: const Text('暫停下載'),
-                  )
-                else if (m.phase == SlmPhase.missing || m.phase == SlmPhase.error)
-                  FilledButton.icon(
-                    onPressed: busy ? null : m.download,
-                    icon: const Icon(Icons.download),
-                    label: Text(m.progress > 0 ? '繼續下載' : '下載模型（1.6 GB）'),
+                    onPressed: busy ? null : m.importExperiment,
+                    icon: const Icon(Icons.science_outlined),
+                    label: const Text('匯入實驗版本（先選 manifest，再選模型）'),
                   ),
-                if (m.phase == SlmPhase.missing || m.phase == SlmPhase.error)
-                  OutlinedButton.icon(
-                    onPressed: busy ? null : m.importFile,
-                    icon: const Icon(Icons.folder_open),
-                    label: const Text('從檔案匯入 .litertlm'),
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: Text(m.ready ? '完成' : '返回'),
                   ),
-                if (m.phase == SlmPhase.error)
-                  OutlinedButton(onPressed: m.load, child: const Text('重試載入')),
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: Text(m.ready ? '完成' : '返回'),
-                ),
-              ]),
+                ],
+              ),
             ],
           );
         },
