@@ -18,6 +18,11 @@ class CloudTranscript {
   final int? timingMs;
 }
 
+/// 台語辨識還在叫醒、而華語結果不通順：不給錯的文字，請乘客幾秒後再說一次。
+class TaigiWarming implements Exception {
+  const TaigiWarming();
+}
+
 class CloudSpeech {
   CloudSpeech({required this.url, required this.token});
   final String url;
@@ -51,6 +56,7 @@ class CloudSpeech {
       throw HttpException('雲端辨識失敗（${response.statusCode}）');
     }
     final data = jsonDecode(body) as Map<String, dynamic>;
+    if (data['error'] == 'taigi_warming') throw const TaigiWarming();
     final text = '${data['text'] ?? ''}'.trim();
     if (data['ok'] != true || text.isEmpty || text.runes.length > 500) {
       throw const FormatException('雲端辨識沒有結果');

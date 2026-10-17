@@ -399,6 +399,10 @@ class _RepairScreenState extends State<RepairScreen> {
             ? '雲端台語辨識・請核對後再提交'
             : '雲端語音辨識・請核對後再提交';
       }
+    } on TaigiWarming {
+      if (mounted && request == speechRequest) {
+        speechStatus = '台語辨識準備中，請稍等幾秒再說一次。';
+      }
     } catch (_) {
       if (mounted && request == speechRequest) {
         speechStatus = '雲端辨識沒有完成，請再說一次或輸入文字。';
