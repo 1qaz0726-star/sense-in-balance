@@ -8,6 +8,7 @@ param(
     [switch]$SkipInstall,
     [switch]$RestartApp,
     [switch]$SkipClockSync,
+    [switch]$Coordination,
     [string]$SdkRoot = (Join-Path $env:LOCALAPPDATA 'Android\Sdk'),
     [string]$ModelLauncher = '',
     [string]$ServerPath = '',
@@ -45,10 +46,10 @@ if ([string]::IsNullOrWhiteSpace($ModelLauncher)) {
     $ModelLauncher = Join-Path $taskScriptRoot 'start-hybrid-v3-model.ps1'
 }
 if ([string]::IsNullOrWhiteSpace($ApkPath)) {
-    $ApkPath = Join-Path $taskWorkspaceRoot '.local\hybrid-v3\hybrid-v3-pc-x64.apk'
+    $ApkPath = Join-Path $taskWorkspaceRoot $(if ($Coordination) { '.local\cabin-c\cabin-c-pc-x64.apk' } else { '.local\hybrid-v3\hybrid-v3-pc-x64.apk' })
 }
 if ([string]::IsNullOrWhiteSpace($PhoneApkPath)) {
-    $PhoneApkPath = Join-Path $taskWorkspaceRoot '.local\hybrid-v3\hybrid-v3-driver-arm64-x64.apk'
+    $PhoneApkPath = Join-Path $taskWorkspaceRoot $(if ($Coordination) { '.local\cabin-c\cabin-c-driver-arm64-x64.apk' } else { '.local\hybrid-v3\hybrid-v3-driver-arm64-x64.apk' })
 }
 
 Set-StrictMode -Version 2.0
@@ -57,11 +58,11 @@ $taskAdb = Join-Path $SdkRoot 'platform-tools\adb.exe'
 $taskEmulator = Join-Path $SdkRoot 'emulator\emulator.exe'
 $taskPowerShell = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
 $taskModelAlias = 'cabin-v3-clean-hybrid'
-$taskPackage = 'com.auohack.cockpit_hmi.hybridv3'
-$taskComponent = 'com.auohack.cockpit_hmi.hybridv3/com.auohack.cockpit_hmi.MainActivity'
+$taskPackage = if ($Coordination) { 'com.auohack.cockpit_hmi.coordination' } else { 'com.auohack.cockpit_hmi.hybridv3' }
+$taskComponent = "$taskPackage/com.auohack.cockpit_hmi.MainActivity"
 $taskTabletSerial = 'emulator-5554'
 $taskPhoneSerial = 'emulator-5556'
-$taskLogRoot = Join-Path $taskWorkspaceRoot '.local\hybrid-v3\logs'
+$taskLogRoot = Join-Path $taskWorkspaceRoot $(if ($Coordination) { '.local\cabin-c\logs' } else { '.local\hybrid-v3\logs' })
 $taskExpectedModelHash = '91793812b9ad0fab54a85119fa7cb1b16d9129be446b5bbe63c8340e6d13fbd1'
 $taskExpectedModelBytes = 1646573152
 if ([string]::IsNullOrWhiteSpace($ModelPath)) {
@@ -599,8 +600,12 @@ function Wait-HubStatus {
         if ($null -ne $status) {
             $fields = @($status.PSObject.Properties.Name)
             if ($fields -notcontains 'type' -or $fields -notcontains 'schema' -or $fields -notcontains 'model' -or
-                $status.type -cne 'repair_status' -or $status.schema -ne 1) {
-                throw '8767 is not the expected repair Hub. No other App was stopped.'
+                $status.type -cne 'repair_status' -or $status.schema -ne $(if ($Coordination) { 2 } else { 1 })) {
+                throw '8767 is not the expected repair Hub schema.'
+            }
+            if ($Coordination -and ($fields -notcontains 'cabin_context' -or
+                [string]::IsNullOrWhiteSpace([string]$status.cabin_context.cabin_session_id))) {
+                throw 'C Hub did not expose a cabin session; readiness was not established.'
             }
             $modelStatus = [string]$status.model
             if ($modelStatus.Contains($taskModelAlias) -and $modelStatus.Contains('電腦本地推論')) {
@@ -612,11 +617,11 @@ function Wait-HubStatus {
         Write-Host "Waiting for tablet Hub ($taskAttempt / 5); task completion and model quality are not yet tested."
         if ($taskAttempt -lt 5) { Start-Sleep -Seconds 2 }
     }
-    throw "Hub readiness was not verified after five read-only attempts. Existing Apps remain untouched. $lastError"
+    throw "Hub readiness was not verified after five read-only attempts. $lastError"
 }
 
 try {
-    Write-Host 'Hybrid V3｜雙裝置桌面實測' -ForegroundColor Cyan
+    Write-Host $(if ($Coordination) { 'C｜注意力模式與座艙能力協調' } else { 'Hybrid V3｜雙裝置桌面實測' }) -ForegroundColor Cyan
     foreach ($required in @($taskAdb, $taskEmulator, $taskPowerShell, $ModelLauncher, $ModelPath, $ServerPath)) {
         if (-not (Test-Path -LiteralPath $required -PathType Leaf)) { throw "缺少必要檔案：$required" }
     }
@@ -662,6 +667,19 @@ try {
     foreach ($definition in $devices) { Wait-DemoBoot $definition }
     Sync-HybridVirtualClock
 
+    # These two preserved demo packages share a Hub port. Switching the selected
+    # demo stops only its known sibling on these identity-verified AVDs; no data
+    # clear or uninstall is performed, and no original/physical App is touched.
+    $taskSiblingPackage = if ($Coordination) { 'com.auohack.cockpit_hmi.hybridv3' } else { 'com.auohack.cockpit_hmi.coordination' }
+    foreach ($definition in $devices) {
+        Assert-AvdIdentity -Serial $definition.Serial -Name $definition.Name
+        $taskSibling = Invoke-DemoAdb -Arguments @('-s', $definition.Serial, 'shell', 'pidof', $taskSiblingPackage) -AllowFailure
+        if ($taskSibling.ExitCode -eq 0 -and $taskSibling.Output.Trim() -match '^\d') {
+            [void](Invoke-DemoAdb -Arguments @('-s', $definition.Serial, 'shell', 'am', 'force-stop', $taskSiblingPackage) -TimeoutSeconds 15)
+            Write-Host "Switching demo: stopped only $taskSiblingPackage on $($definition.Name); installed data retained."
+        }
+    }
+
     $installTargets = @(
         [pscustomobject]@{ Serial = $taskTabletSerial; Apk = $ApkPath; Label = '平板乘客詳細端' },
         [pscustomobject]@{ Serial = $taskPhoneSerial; Apk = $PhoneApkPath; Label = '手機駕駛摘要端' }
@@ -702,6 +720,6 @@ try {
 } catch {
     Write-Host ''
     Write-Host "啟動未完成：$($_.Exception.Message)" -ForegroundColor Red
-    Write-Host '助手未卸載 App、未 wipe、未更改永久執行政策，也未關閉其他程序。'
+    Write-Host '助手未卸載 App、未 wipe、未更改永久執行政策；切換模式只會暫停兩個指定模擬器上的另一個獨立示範 App。'
     exit 1
 }

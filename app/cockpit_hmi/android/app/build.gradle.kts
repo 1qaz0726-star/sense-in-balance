@@ -36,19 +36,27 @@ android {
                     String(Base64.getDecoder().decode(it), Charsets.UTF_8)
                 }.getOrNull() == "HYBRID_V3_DEMO=true"
             }
+        val coordination = (project.findProperty("dart-defines") as? String)
+            .orEmpty().split(',').any {
+                runCatching {
+                    String(Base64.getDecoder().decode(it), Charsets.UTF_8)
+                }.getOrNull() == "CABIN_COORDINATION=true"
+            }
         applicationId = when {
+            coordination -> "com.auohack.cockpit_hmi.coordination"
             hybridV3 -> "com.auohack.cockpit_hmi.hybridv3"
             desktopDemo -> "com.auohack.cockpit_hmi.desktopdemo"
             else -> "com.auohack.cockpit_hmi"
         }
         manifestPlaceholders["appLabel"] = when {
+            coordination -> "感知有度 C"
             hybridV3 -> "座艙 Hybrid V3"
             desktopDemo -> "不用重講 PC 實測"
             else -> "座艙 HMI"
         }
         // Isolated demonstration builds use local HTTP/WS between devices.
         // Ordinary release builds keep Android's cleartext prohibition.
-        manifestPlaceholders["allowCleartext"] = hybridV3.toString()
+        manifestPlaceholders["allowCleartext"] = (hybridV3 || coordination).toString()
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = 24

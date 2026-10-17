@@ -103,12 +103,17 @@ class RepairSpeechInput {
 /// by Android. No model-generated narration and no automatic repeated speech.
 class RepairSpeechFeedback {
   final FlutterTts _tts = FlutterTts();
+  int _generation = 0;
 
-  Future<bool> speak(String text) async {
+  Future<bool> speak(String text, {bool Function()? allowed}) async {
+    final generation = ++_generation;
+    bool current() => generation == _generation && (allowed?.call() ?? true);
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return false;
-    if (text.trim().isEmpty || text.runes.length > 100) return false;
+    if (text.trim().isEmpty || text.runes.length > 100 || !current()) {
+      return false;
+    }
     final voices = await _tts.getVoices;
-    if (voices is! List) return false;
+    if (!current() || voices is! List) return false;
     final available = voices.whereType<Map>().where(
       (voice) =>
           '${voice['locale']}'.replaceAll('_', '-').toLowerCase() == 'zh-tw' &&
@@ -121,9 +126,14 @@ class RepairSpeechFeedback {
       'name': '${voice['name']}',
       'locale': '${voice['locale']}',
     });
+    if (!current()) return false;
     await _tts.setSpeechRate(0.48);
+    if (!current()) return false;
     return await _tts.speak(text.trim()) == 1;
   }
 
-  Future<void> stop() async => _tts.stop();
+  Future<void> stop() async {
+    ++_generation;
+    await _tts.stop();
+  }
 }

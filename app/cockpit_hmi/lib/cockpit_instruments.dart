@@ -537,14 +537,17 @@ class _TurnSignal extends StatefulWidget {
 
 class _TurnSignalState extends State<_TurnSignal>
     with SingleTickerProviderStateMixin {
-  late final AnimationController controller = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 330),
-  );
+  late final AnimationController controller;
 
   @override
   void initState() {
     super.initState();
+    // Eager initialization: an unlit signal may be removed before it ever
+    // builds a FadeTransition. Creating its ticker in dispose is too late.
+    controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 330),
+    );
     if (widget.on) controller.repeat(reverse: true);
   }
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'cockpit_design.dart';
+import 'cabin_coordination_widgets.dart';
 import 'repair_task.dart';
 
 String cabinSettingLabel(String setting) => switch (setting) {
@@ -20,7 +21,7 @@ String requestedChangeLabel(String change) => switch (change) {
 };
 
 /// Completed UI and speech both require the same actual simulated receipt.
-Map? completedSimulatedCabinState(Map task) {
+Map? completedSimulatedCabinState(Map task, {Map? cabinContext}) {
   final result = task['result'];
   if (task['phase'] != 'completed' ||
       result is! Map ||
@@ -30,12 +31,45 @@ Map? completedSimulatedCabinState(Map task) {
     return null;
   }
   final state = result['state'] as Map;
+  if (cabinContext != null) {
+    final execution = result['execution_context'];
+    if (execution is! Map ||
+        execution.length != 3 ||
+        execution['cabin_session_id'] != cabinContext['cabin_session_id'] ||
+        execution['profile_id'] != cabinContext['profile_id'] ||
+        execution['profile_revision'] != cabinContext['profile_revision']) {
+      return null;
+    }
+    final items = result['items'];
+    final pending = task['pending'];
+    if (items is! Map ||
+        pending is! Map ||
+        pending.isEmpty ||
+        items.length != pending.length) {
+      return null;
+    }
+    for (final name in pending.keys) {
+      if (!cabinSettingReadable(cabinContext, '$name') ||
+          items[name] is! Map ||
+          (items[name] as Map)['success'] != true ||
+          (items[name] as Map)['before'] is! int ||
+          (items[name] as Map)['after'] != state[name]) {
+        return null;
+      }
+    }
+  }
   for (final setting in CabinSetting.values) {
+    if (!cabinSettingReadable(cabinContext, setting.name)) continue;
     final value = state[setting.name];
     final max = setting == CabinSetting.rearFan ? 7 : 10;
     if (value is! int || value < 0 || value > max) return null;
   }
-  return state;
+  return {
+    for (final setting in CabinSetting.values)
+      setting.name: cabinSettingReadable(cabinContext, setting.name)
+          ? state[setting.name]
+          : null,
+  };
 }
 
 class DemoFaultNotice extends StatelessWidget {
@@ -65,15 +99,22 @@ class PassengerCandidateEditor extends StatelessWidget {
     required this.onPatch,
     this.changedSettings = const {},
     this.acknowledgedItems = const {},
+    this.unsupported = const {},
+    this.removedSettings = const {},
   });
   final Map<CabinSetting, RequestedChange> pending;
   final bool canRevise;
   final void Function(CabinSetting, RequestedChange) onPatch;
   final Set<CabinSetting> changedSettings;
   final Map<CabinSetting, Map<String, dynamic>> acknowledgedItems;
+  final Map unsupported;
+  final Set<CabinSetting> removedSettings;
 
   String _settingSummary(CabinSetting setting) {
     final change = pending[setting];
+    if (removedSettings.contains(setting) && change == null) {
+      return '待辦已取消，未送出';
+    }
     if (change != null) return requestedChangeLabel(change.name);
     final item = acknowledgedItems[setting];
     if (item?['success'] == true) {
@@ -121,9 +162,26 @@ class PassengerCandidateEditor extends StatelessWidget {
                             : CockpitStyle.muted,
                       ),
                     ),
+                    if (pending.containsKey(setting) &&
+                        unsupported.containsKey(setting.name)) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        '${unsupported[setting.name]}',
+                        style: cockpitText(12, color: CockpitStyle.amber),
+                      ),
+                    ],
                   ],
                 ),
               ),
+              if (pending.containsKey(setting) &&
+                  unsupported.containsKey(setting.name))
+                TextButton(
+                  key: ValueKey('passenger_remove_${setting.name}'),
+                  onPressed: canRevise
+                      ? () => onPatch(setting, RequestedChange.remove)
+                      : null,
+                  child: const Text('取消此項'),
+                ),
               PopupMenuButton<RequestedChange>(
                 key: ValueKey('passenger_edit_${setting.name}'),
                 tooltip: '只修改${cabinSettingLabel(setting.name)}',
@@ -182,6 +240,7 @@ class DriverCollaborationPanel extends StatefulWidget {
     this.onSpeak,
     this.speechBusy = false,
     this.speechNotice,
+    this.cabinContext,
   });
   final Map task;
   final Map collaboration;
@@ -192,6 +251,7 @@ class DriverCollaborationPanel extends StatefulWidget {
   final VoidCallback? onSpeak;
   final bool speechBusy;
   final String? speechNotice;
+  final Map? cabinContext;
 
   @override
   State<DriverCollaborationPanel> createState() =>
@@ -263,14 +323,30 @@ class _DriverCollaborationPanelState extends State<DriverCollaborationPanel> {
     final hasPreviousSuccess =
         items?.values.any((item) => item is Map && item['success'] == true) ??
         false;
-    final finalState = completedSimulatedCabinState(task);
+    final finalState = completedSimulatedCabinState(
+      task,
+      cabinContext: widget.cabinContext,
+    );
     final completed = finalState != null;
+    final blocked = cabinAttentionBlocked(widget.cabinContext);
+    final resume = cabinRequiresResume(widget.cabinContext);
+    final unsupported = cabinUnsupported(widget.cabinContext);
+    final contextInfo = widget.cabinContext;
+    final contextReady =
+        contextInfo == null ||
+        contextInfo[resume ? 'can_resume_confirm' : 'can_confirm'] == true;
     final demoFault = widget.fresh
         ? (widget.collaboration['demo_fault'] ??
               widget.collaboration['demo_fault_source'])
         : null;
     final headline = !widget.fresh
         ? '等待重新連線'
+        : blocked && phase != 'indeterminate' && phase != 'executing'
+        ? cabinAttentionHeadline(widget.cabinContext)
+        : active && unsupported.isNotEmpty
+        ? '有一項此車不支援'
+        : resume && phase == 'awaitingConfirmation'
+        ? '確認最新需求'
         : switch (phase) {
             'parsing' => '乘客正在整理需求',
             'awaitingConfirmation' => '請看需求摘要',
@@ -288,7 +364,7 @@ class _DriverCollaborationPanelState extends State<DriverCollaborationPanel> {
       children: [
         Text(
           driver
-              ? '已配對駕駛屏'
+              ? '已配對駕駛屏${widget.cabinContext?['profile'] is Map ? ' · ${(widget.cabinContext!['profile'] as Map)['label']}' : ''}'
               : widget.fresh
               ? '觀察模式 · 尚未配對'
               : '連線已中斷',
@@ -315,6 +391,12 @@ class _DriverCollaborationPanelState extends State<DriverCollaborationPanel> {
               ? '確認已送出；收到回報前不會顯示完成，也不能再送一次。'
               : phase == 'indeterminate'
               ? '${task['error'] ?? '回報未知；先查證，不可重送。'}'
+              : blocked
+              ? '乘客需求已保留，暫不需要處理。'
+              : unsupported.isNotEmpty && active
+              ? '請由乘客取消受限待辦，再確認其餘設定；不會自動改其他設備。'
+              : resume
+              ? '優先事件已解除；請核對最新摘要，確認後才套用。'
               : '候選不會直接執行。你可授權乘客只改細節，最後由你確認。',
           style: cockpitText(13, color: CockpitStyle.muted, height: 1.7),
         ),
@@ -358,7 +440,7 @@ class _DriverCollaborationPanelState extends State<DriverCollaborationPanel> {
                 ),
               ),
         ],
-        if (widget.fresh && (active || phase == 'parsing')) ...[
+        if (widget.fresh && !blocked && (active || phase == 'parsing')) ...[
           const SizedBox(height: 18),
           if (widget.changedSettings.isNotEmpty &&
               revision is int &&
@@ -387,7 +469,11 @@ class _DriverCollaborationPanelState extends State<DriverCollaborationPanel> {
                     ),
                   ),
                   Text(
-                    requestedChangeLabel('${pending[setting.name] ?? ''}'),
+                    unsupported.containsKey(setting.name)
+                        ? '此車受限 · 未送出'
+                        : requestedChangeLabel(
+                            '${pending[setting.name] ?? ''}',
+                          ),
                     style: cockpitText(
                       14,
                       color: widget.changedSettings.contains(setting.name)
@@ -399,7 +485,7 @@ class _DriverCollaborationPanelState extends State<DriverCollaborationPanel> {
               ),
             ),
         ],
-        if (widget.fresh && task['clarification'] is String) ...[
+        if (widget.fresh && !blocked && task['clarification'] is String) ...[
           const SizedBox(height: 12),
           Text(
             '${task['clarification']}',
@@ -413,14 +499,15 @@ class _DriverCollaborationPanelState extends State<DriverCollaborationPanel> {
             style: cockpitText(13, color: CockpitStyle.amber),
           ),
         ],
-        if (completed) ...[
+        if (completed && !blocked) ...[
           const SizedBox(height: 16),
           _CompletedRepairValues(
             state: finalState,
             items: items,
             requested: pending,
+            cabinContext: widget.cabinContext,
           ),
-          if (widget.onSpeak != null) ...[
+          if (widget.onSpeak != null && !blocked) ...[
             const SizedBox(height: 8),
             Align(
               alignment: Alignment.centerLeft,
@@ -501,10 +588,15 @@ class _DriverCollaborationPanelState extends State<DriverCollaborationPanel> {
             spacing: 12,
             runSpacing: 10,
             children: [
-              if (active)
+              if (active && !blocked)
                 OutlinedButton(
                   key: const ValueKey('driver_grant'),
-                  onPressed: enabled && hasCurrentTask && active
+                  onPressed:
+                      enabled &&
+                          hasCurrentTask &&
+                          active &&
+                          (widget.cabinContext == null ||
+                              widget.cabinContext?['can_grant'] == true)
                       ? () => widget.onAction('grant')
                       : null,
                   child: const Text('授權乘客協助 120 秒'),
@@ -517,16 +609,28 @@ class _DriverCollaborationPanelState extends State<DriverCollaborationPanel> {
                       : null,
                   child: const Text('收回授權'),
                 ),
-              if (active)
+              if (active && !blocked)
                 FilledButton(
                   key: const ValueKey('driver_confirm'),
                   onPressed:
                       enabled &&
                           hasCurrentTask &&
-                          phase == 'awaitingConfirmation'
-                      ? () => widget.onAction('confirm')
+                          phase == 'awaitingConfirmation' &&
+                          contextReady &&
+                          unsupported.isEmpty
+                      ? () => widget.onAction(
+                          resume ? 'resume_confirm' : 'confirm',
+                        )
                       : null,
-                  child: const Text('確認套用（車控模擬）'),
+                  child: Text(
+                    widget.cabinContext == null
+                        ? '確認套用（車控模擬）'
+                        : unsupported.isNotEmpty
+                        ? '先處理受限項目'
+                        : resume
+                        ? '繼續並確認最新 ${pending.length} 項'
+                        : '確認這次調整',
+                  ),
                 ),
               TextButton(
                 key: const ValueKey('driver_cancel'),
@@ -575,10 +679,12 @@ class _CompletedRepairValues extends StatelessWidget {
     required this.state,
     required this.items,
     required this.requested,
+    this.cabinContext,
   });
   final Map state;
   final Map? items;
   final Map requested;
+  final Map? cabinContext;
 
   @override
   Widget build(BuildContext context) => Column(
@@ -607,7 +713,9 @@ class _CompletedRepairValues extends StatelessWidget {
                         requested.containsKey(setting.name)) ...[
                       const SizedBox(height: 3),
                       Text(
-                        items?[setting.name] is Map
+                        !cabinSettingReadable(cabinContext, setting.name)
+                            ? '此模擬座艙未提供介面；未送出'
+                            : items?[setting.name] is Map
                             ? '${(items![setting.name] as Map)['before']} → ${(items![setting.name] as Map)['after']} · ${(items![setting.name] as Map)['success'] == true ? '已回報' : '未完成'}'
                             : requested.containsKey(setting.name)
                             ? '未提供逐項回報'
@@ -619,12 +727,14 @@ class _CompletedRepairValues extends StatelessWidget {
                 ),
               ),
               Text(
-                '${state[setting.name]}',
+                state[setting.name]?.toString() ?? '—',
                 key: ValueKey('driver_final_${setting.name}'),
                 style: cockpitText(28, weight: FontWeight.w400),
               ),
               Text(
-                ' / ${setting == CabinSetting.rearFan ? 7 : 10}',
+                cabinSettingReadable(cabinContext, setting.name)
+                    ? ' / ${setting == CabinSetting.rearFan ? 7 : 10}'
+                    : ' / 不提供',
                 style: cockpitText(11, color: CockpitStyle.muted),
               ),
             ],

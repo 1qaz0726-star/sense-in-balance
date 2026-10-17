@@ -124,7 +124,11 @@ class ExecutionReceipt {
     this.simulated = false,
     Map<CabinSetting, int> state = const {},
     Map<CabinSetting, Map<String, dynamic>> items = const {},
+    Map<String, dynamic>? executionContext,
   }) : state = Map.unmodifiable(state),
+       executionContext = executionContext == null
+           ? null
+           : Map<String, dynamic>.unmodifiable(executionContext),
        items = Map.unmodifiable({
          for (final entry in items.entries)
            entry.key: Map<String, dynamic>.unmodifiable(entry.value),
@@ -135,12 +139,14 @@ class ExecutionReceipt {
   final bool simulated;
   final Map<CabinSetting, int> state;
   final Map<CabinSetting, Map<String, dynamic>> items;
+  final Map<String, dynamic>? executionContext;
 
   Map<String, dynamic> toJson() => {
     'success': success,
     'message': message,
     'simulated': simulated,
     'state': {for (final e in state.entries) e.key.name: e.value},
+    if (executionContext != null) 'execution_context': executionContext,
     if (items.isNotEmpty)
       'items': {for (final entry in items.entries) entry.key.name: entry.value},
   };
@@ -203,6 +209,7 @@ class RepairController extends ChangeNotifier {
     required CabinActuator actuator,
     this.parseTimeout = const Duration(seconds: 15),
     this.executionTimeout = const Duration(seconds: 8),
+    this.executionContext,
   }) : _parser = parser,
        _actuator = actuator;
 
@@ -210,6 +217,10 @@ class RepairController extends ChangeNotifier {
   final CabinActuator _actuator;
   final Duration parseTimeout;
   final Duration executionTimeout;
+
+  /// C binds the ACK to the admitted cabin, without binding attention epochs:
+  /// an alert after dispatch must not invalidate a genuine late receipt.
+  final Map<String, dynamic> Function()? executionContext;
   RepairSnapshot _snapshot = RepairSnapshot();
   RepairSnapshot get snapshot => _snapshot;
   int _taskNumber = 0;
@@ -224,6 +235,22 @@ class RepairController extends ChangeNotifier {
   bool get _executionLocked =>
       _snapshot.phase == RepairPhase.executing ||
       _snapshot.phase == RepairPhase.indeterminate;
+
+  /// Only a settled session can be replaced. Unknown execution cannot be reset.
+  bool resetForSession() {
+    if (_disposed ||
+        !const {
+          RepairPhase.idle,
+          RepairPhase.completed,
+          RepairPhase.cancelled,
+        }.contains(_snapshot.phase)) {
+      return false;
+    }
+    ++_requestNumber;
+    _parseBase = null;
+    _publish(RepairSnapshot());
+    return true;
+  }
 
   void _publish(RepairSnapshot value) {
     if (_disposed) return;
@@ -449,6 +476,9 @@ class RepairController extends ChangeNotifier {
         (confirmationGuard != null && !confirmationGuard!(taskId, revision))) {
       return false;
     }
+    final admittedContext = executionContext == null
+        ? null
+        : Map<String, dynamic>.unmodifiable(executionContext!());
     // 在呼叫 adapter 前切換階段；連點或重送同一確認都不會再次執行。
     _publish(
       RepairSnapshot(
@@ -459,7 +489,9 @@ class RepairController extends ChangeNotifier {
         result: before.result,
       ),
     );
-    final commandId = '$taskId:$revision';
+    final commandId = admittedContext == null
+        ? '$taskId:$revision'
+        : '${admittedContext['cabin_session_id']}:$taskId:$revision';
     bool active() =>
         !_disposed &&
         _snapshot.taskId == taskId &&
@@ -470,7 +502,13 @@ class RepairController extends ChangeNotifier {
       if (!active()) return;
       // Structured receipts must account for every requested setting. A
       // contradictory or incomplete ACK cannot establish what really ran.
-      if (!_consistentReceipt(receipt, before.pending)) {
+      if (!_consistentReceipt(receipt, before.pending) ||
+          (admittedContext != null &&
+              (receipt.items.isEmpty ||
+                  !_sameExecutionContext(
+                    admittedContext,
+                    receipt.executionContext,
+                  )))) {
         _publish(
           RepairSnapshot(
             taskId: taskId,
@@ -519,6 +557,7 @@ class RepairController extends ChangeNotifier {
               entry.key: entry.value,
           ...receipt.items,
         },
+        executionContext: receipt.executionContext,
       );
       _publish(
         RepairSnapshot(
@@ -610,32 +649,84 @@ bool _consistentReceipt(
       receipt.items.values.every((item) => item['success'] == true);
 }
 
+bool _sameExecutionContext(
+  Map<String, dynamic> expected,
+  Map<String, dynamic>? actual,
+) =>
+    actual != null &&
+    expected.length == 3 &&
+    expected['cabin_session_id'] is String &&
+    expected['profile_id'] is String &&
+    expected['profile_revision'] is int &&
+    actual.length == expected.length &&
+    expected.entries.every((entry) => actual[entry.key] == entry.value);
+
 /// 僅修改記憶體，不接 CAN、真冷氣或車用音響。
 class MockCabinActuator {
-  MockCabinActuator({int rearFan = 3, int mediaVolume = 5, int navVolume = 5})
-    : _state = {
-        CabinSetting.rearFan: rearFan,
-        CabinSetting.mediaVolume: mediaVolume,
-        CabinSetting.navVolume: navVolume,
-      };
+  MockCabinActuator({
+    int rearFan = 3,
+    int mediaVolume = 5,
+    int navVolume = 5,
+    this.supports,
+    this.executionContext,
+  }) : _state = {
+         CabinSetting.rearFan: rearFan,
+         CabinSetting.mediaVolume: mediaVolume,
+         CabinSetting.navVolume: navVolume,
+       };
 
   final Map<CabinSetting, int> _state;
   final Map<String, ExecutionReceipt> _receipts = {};
+  final Map<String, String> _fingerprints = {};
+  final bool Function(CabinSetting)? supports;
+  final Map<String, dynamic> Function()? executionContext;
   int executeCount = 0;
   Map<CabinSetting, int> get state => Map.unmodifiable(_state);
+
+  /// Host calls this only AFTER a successful clean parked session replacement.
+  void reset() {
+    _state
+      ..[CabinSetting.rearFan] = 3
+      ..[CabinSetting.mediaVolume] = 5
+      ..[CabinSetting.navVolume] = 5;
+    _receipts.clear();
+    _fingerprints.clear();
+    executeCount = 0;
+  }
 
   Future<ExecutionReceipt> call(
     Map<CabinSetting, RequestedChange> changes,
     String commandId,
   ) async {
+    final context = executionContext?.call();
+    final sorted = changes.entries.toList()
+      ..sort((a, b) => a.key.name.compareTo(b.key.name));
+    final fingerprint = jsonEncode({
+      'changes': {for (final entry in sorted) entry.key.name: entry.value.name},
+      if (context != null) 'execution_context': context,
+    });
     final cached = _receipts[commandId];
-    if (cached != null) return cached;
-    if (changes.values.contains(RequestedChange.remove)) {
+    if (cached != null && _fingerprints[commandId] == fingerprint) {
+      return cached;
+    }
+    final unsupported = changes.keys.any(
+      (setting) => !(supports?.call(setting) ?? true),
+    );
+    if (cached != null ||
+        commandId.isEmpty ||
+        changes.isEmpty ||
+        unsupported ||
+        changes.values.contains(RequestedChange.remove)) {
       return ExecutionReceipt(
         success: false,
         simulated: true,
-        message: '模擬控制：remove 應在待執行任務中處理，未執行。',
+        message: unsupported
+            ? '本模擬座艙有不支援項目；整批未執行。'
+            : cached != null
+            ? '同一命令 ID 的內容不一致；未再次執行。'
+            : '模擬控制：候選或命令不合法，未執行。',
         state: _state,
+        executionContext: context,
         items: {
           for (final entry in changes.entries)
             entry.key: {
@@ -672,8 +763,10 @@ class MockCabinActuator {
       message: '模擬控制已完成；未連接真實車輛。',
       state: _state,
       items: items,
+      executionContext: context,
     );
     _receipts[commandId] = receipt;
+    _fingerprints[commandId] = fingerprint;
     return receipt;
   }
 }

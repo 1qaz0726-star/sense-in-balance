@@ -7,6 +7,9 @@ import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'cockpit_design.dart';
+import 'cabin_policy.dart';
+import 'cabin_cockpit_source.dart';
+import 'cabin_coordination_widgets.dart';
 import 'cockpit_alert_slot.dart';
 import 'cockpit_instruments.dart';
 import 'hub.dart' as original;
@@ -37,7 +40,24 @@ class _RepairScreenState extends State<RepairScreen> {
   late final RepairCollaboration collaboration;
   late final RepairHub hub;
   late final RemoteRepairModel? remoteModel;
-  final actuator = MockCabinActuator();
+  late final MockCabinActuator actuator;
+  CabinPolicy? policy;
+  static const coordinationEnabled = bool.fromEnvironment('CABIN_COORDINATION');
+  Timer? coordinationWatch;
+  String? sourceSession;
+  int drivingSequence = 0, episodeNumber = 0;
+  String drivingEpisode = 'driving-baseline';
+  CabinDrivingMode drivingMode = CabinDrivingMode.manual;
+  bool drivingSourceOnline = true;
+  bool previousAttentionBlocked = true;
+  CabinCockpitSource? cockpitSource;
+  String? sessionNotice;
+  final Set<CabinSetting> removedSettings = {};
+  Map<String, dynamic> get executionIdentity => {
+    'cabin_session_id': policy!.sessionId,
+    'profile_id': policy!.profile.id,
+    'profile_revision': policy!.profile.revision,
+  };
   final cockpit = original.Hub.I;
   bool ownsCockpit = false;
   bool showInstruments = false;
@@ -104,7 +124,10 @@ class _RepairScreenState extends State<RepairScreen> {
       unawaited(cockpit.start(network: false));
     }
     // 2026-10-13：接回原作的車內語音（安全警示、換氣告知），與原「中控」模式同一套 TTS。
-    cockpit.onSpeak = (t, urgent) => Voice.I.say(t, urgent: urgent);
+    cockpit.onSpeak = (t, urgent) {
+      policy?.refresh();
+      if (urgent || policy?.blocked != true) Voice.I.say(t, urgent: urgent);
+    };
     unawaited(Voice.I.init());
     cockpitWatch = Timer.periodic(const Duration(seconds: 1), (_) {
       final fresh = cockpitFresh;
@@ -140,7 +163,14 @@ class _RepairScreenState extends State<RepairScreen> {
         // 存不了檔就只放在記憶體，不影響其他功能。
       }
     }());
+    actuator = MockCabinActuator(
+      supports: coordinationEnabled
+          ? (setting) => policy?.profile.supported.contains(setting) == true
+          : null,
+      executionContext: coordinationEnabled ? () => executionIdentity : null,
+    );
     controller = RepairController(
+      executionContext: coordinationEnabled ? () => executionIdentity : null,
       parseTimeout: Duration(seconds: remoteModel == null ? 60 : 30),
       parser: RepairParser(
         (system, prompt) {
@@ -162,7 +192,18 @@ class _RepairScreenState extends State<RepairScreen> {
       ).call,
       actuator: actuator.call,
     );
-    collaboration = RepairCollaboration(controller);
+    if (coordinationEnabled) policy = CabinPolicy(controller);
+    collaboration = RepairCollaboration(controller, policy: policy);
+    if (policy != null) {
+      _registerCoordinationSources();
+      policy!.addListener(_attentionChanged);
+      // Register before RepairHub subscribes: a newly published priority
+      // signal updates the host gate before that signal reaches clients.
+      cockpit.addListener(_sampleCoordinationSources);
+      coordinationWatch = Timer.periodic(const Duration(seconds: 1), (_) {
+        _sampleCoordinationSources();
+      });
+    }
     controller.addListener(_capturePendingChanges);
     hub = RepairHub(
       controller,
@@ -208,6 +249,8 @@ class _RepairScreenState extends State<RepairScreen> {
   @override
   void dispose() {
     cockpitWatch?.cancel();
+    coordinationWatch?.cancel();
+    if (policy != null) cockpit.removeListener(_sampleCoordinationSources);
     cloudWatch?.cancel();
     cockpit.onSpeak = null;
     unawaited(hub.stop());
@@ -215,6 +258,8 @@ class _RepairScreenState extends State<RepairScreen> {
     controller.removeListener(_capturePendingChanges);
     collaboration.cancel();
     collaboration.dispose();
+    policy?.removeListener(_attentionChanged);
+    policy?.dispose();
     controller.dispose();
     speech.dispose();
     ++speechRequest;
@@ -250,15 +295,105 @@ class _RepairScreenState extends State<RepairScreen> {
     _learnFromTask(task);
     if (task.taskId != previousTaskId) {
       changedSettings = {};
+      removedSettings.clear();
     } else if (task.phase != RepairPhase.parsing) {
       final changed = {
         for (final setting in CabinSetting.values)
           if (previousPending[setting] != task.pending[setting]) setting,
       };
       if (changed.isNotEmpty) changedSettings = changed;
+      if (task.phase == RepairPhase.awaitingConfirmation ||
+          task.phase == RepairPhase.awaitingClarification) {
+        for (final setting in previousPending.keys) {
+          if (!task.pending.containsKey(setting)) removedSettings.add(setting);
+        }
+        removedSettings.removeWhere(task.pending.containsKey);
+      }
     }
     previousTaskId = task.taskId;
     previousPending = task.pending;
+  }
+
+  void _registerCoordinationSources() {
+    final current = policy!;
+    sourceSession = current.sessionId;
+    drivingSequence = 0;
+    drivingEpisode = '${current.sessionId}-driving-baseline';
+    drivingMode = CabinDrivingMode.manual;
+    drivingSourceOnline = true;
+    current.registerSource(CabinPolicy.drivingSource, '$sourceSession-driving');
+    current.registerSource(CabinPolicy.safetySource, '$sourceSession-safety');
+    cockpitSource = CabinCockpitSource(current, '$sourceSession-safety');
+    // Registration alone does not assert a clear source. The first real
+    // simulator sample arrives via the next one-second heartbeat.
+  }
+
+  void _sampleCoordinationSources() {
+    final current = policy;
+    if (current == null || sourceSession != current.sessionId) return;
+    if (drivingSourceOnline) {
+      current.observe(
+        CabinAttentionFrame(
+          sourceId: CabinPolicy.drivingSource,
+          sourceSession: '$sourceSession-driving',
+          sequence: ++drivingSequence,
+          episodeId: drivingEpisode,
+          sampledAt: current.monotonicNow,
+          mode: drivingMode,
+          active: drivingMode == CabinDrivingMode.handoverRequested,
+          known: drivingMode != CabinDrivingMode.unknown,
+        ),
+      );
+    }
+    cockpitSource?.sample(
+      cockpit.last,
+      running: cockpit.running,
+      wallNowSeconds: DateTime.now().microsecondsSinceEpoch / 1000000,
+    );
+    current.refresh();
+  }
+
+  void _attentionChanged() {
+    final current = policy!;
+    if (current.blocked &&
+        !previousAttentionBlocked &&
+        cockpit.last?.decision.urgency != Urgency.safety) {
+      unawaited(Voice.I.stop());
+    }
+    if (current.blocked &&
+        !previousAttentionBlocked &&
+        current.mode == CabinDrivingMode.handoverRequested) {
+      unawaited(Voice.I.say('接管提醒（模擬）', urgent: true));
+    }
+    previousAttentionBlocked = current.blocked;
+  }
+
+  void _setDrivingMode(CabinDrivingMode mode) {
+    if (mode == CabinDrivingMode.handoverRequested &&
+        drivingMode != CabinDrivingMode.handoverRequested) {
+      drivingEpisode = '$sourceSession-driving-${++episodeNumber}';
+    }
+    drivingMode = mode;
+    drivingSourceOnline = true;
+    _sampleCoordinationSources();
+    if (mounted) setState(() {});
+  }
+
+  void _switchCabinProfile(CabinProfile profile) {
+    final parked =
+        cockpitFresh &&
+        '${cockpit.last?.vehicle?['gear'] ?? ''}'.toUpperCase() == 'P';
+    if (!collaboration.startCabinSession(profile, parked: parked)) {
+      setState(() => sessionNotice = '請先模擬停車，並結束或取消目前需求，再切換能力設定。');
+      return;
+    }
+    actuator.reset();
+    _registerCoordinationSources();
+    input.clear();
+    removedSettings.clear();
+    previousPending = const {};
+    previousTaskId = null;
+    setState(() => sessionNotice = '${profile.label}已啟用；請重新配對駕駛屏。');
   }
 
   /// 雲端（或記憶）提出、駕駛確認後完成的需求，寫進車主記憶。
@@ -547,6 +682,7 @@ class _RepairScreenState extends State<RepairScreen> {
             collaboration,
             remoteModel ?? Slm.I,
             cockpit,
+            if (policy != null) policy!,
           ]),
           builder: (context, _) {
             final task = controller.snapshot;
@@ -554,7 +690,7 @@ class _RepairScreenState extends State<RepairScreen> {
               children: [
                 _header(),
                 CockpitAlertSlot(event: cockpit.last, fresh: cockpitFresh),
-                if (MediaQuery.sizeOf(context).width < 920)
+                if (MediaQuery.sizeOf(context).width < 1200)
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 24),
                     child: Align(
@@ -605,6 +741,14 @@ class _RepairScreenState extends State<RepairScreen> {
                     },
                   ),
                 ),
+                if (policy != null)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 28),
+                    child: CabinAttentionStrip(
+                      contextData: policy!.toJson(),
+                      completed: task.phase == RepairPhase.completed,
+                    ),
+                  ),
                 if (showInstruments) _simulationStrip() else _levels(task),
                 Padding(
                   padding: const EdgeInsets.symmetric(
@@ -649,7 +793,7 @@ class _RepairScreenState extends State<RepairScreen> {
               style: cockpitText(21, weight: FontWeight.w500, letterSpacing: 2),
             ),
             Text(
-              'SENSE IN BALANCE',
+              policy?.profile.label ?? 'SENSE IN BALANCE',
               style: cockpitText(
                 9,
                 color: CockpitStyle.muted,
@@ -658,7 +802,7 @@ class _RepairScreenState extends State<RepairScreen> {
             ),
           ],
         ),
-        if (MediaQuery.sizeOf(context).width >= 920) ...[
+        if (MediaQuery.sizeOf(context).width >= 1200) ...[
           const SizedBox(width: 56),
           _viewPicker(),
         ],
@@ -666,22 +810,27 @@ class _RepairScreenState extends State<RepairScreen> {
         if (MediaQuery.sizeOf(context).width >= 620) ...[
           TextButton(onPressed: _showSimulation, child: const Text('展示情境')),
           const SizedBox(width: 20),
+        ],
+        if (MediaQuery.sizeOf(context).width >= 1100) ...[
           Text(
             modelReady ? '本地 AI 就緒' : 'AI 準備中',
             style: cockpitText(12, color: CockpitStyle.muted),
           ),
-          if (cloudAssist != null) ...[
+          if (cloudAssist != null &&
+              MediaQuery.sizeOf(context).width >= 1400) ...[
             const SizedBox(width: 12),
             _cloudStatus(),
           ],
           const SizedBox(width: 24),
         ],
         // 直放（窄螢幕）也要看得出現在是離線還是連網：決賽 S21 直放。
-        if (MediaQuery.sizeOf(context).width < 620 && cloudAssist != null) ...[
+        if (MediaQuery.sizeOf(context).width < 620 &&
+            MediaQuery.sizeOf(context).width >= 500 &&
+            cloudAssist != null) ...[
           _cloudStatus(compact: true),
           const SizedBox(width: 6),
         ],
-        if (MediaQuery.sizeOf(context).width < 620)
+        if (MediaQuery.sizeOf(context).width < 1100)
           IconButton(
             tooltip: '車主記憶',
             onPressed: _showMemory,
@@ -702,7 +851,7 @@ class _RepairScreenState extends State<RepairScreen> {
           ),
           const SizedBox(width: 8),
         ],
-        const CockpitClock(),
+        if (MediaQuery.sizeOf(context).width >= 460) const CockpitClock(),
         const SizedBox(width: 16),
         if (MediaQuery.sizeOf(context).width >= 620)
           TextButton(onPressed: showConnection, child: const Text('連接駕駛屏'))
@@ -789,14 +938,20 @@ class _RepairScreenState extends State<RepairScreen> {
       shape: const RoundedRectangleBorder(),
       builder: (_) => SafeArea(
         child: AnimatedBuilder(
-          animation: cockpit,
-          builder: (_, _) => _simulationStrip(),
+          animation: Listenable.merge([
+            cockpit,
+            controller,
+            if (policy != null) policy!,
+          ]),
+          builder: (_, _) => SingleChildScrollView(
+            child: _simulationStrip(coordinationDetails: true),
+          ),
         ),
       ),
     );
   }
 
-  Widget _simulationStrip() => Container(
+  Widget _simulationStrip({bool coordinationDetails = false}) => Container(
     padding: const EdgeInsets.fromLTRB(28, 14, 28, 12),
     decoration: const BoxDecoration(
       color: CockpitStyle.panel,
@@ -893,6 +1048,74 @@ class _RepairScreenState extends State<RepairScreen> {
             ],
           ),
         ),
+        if (coordinationDetails && policy != null) ...[
+          const SizedBox(height: 16),
+          const Divider(height: 1),
+          const SizedBox(height: 14),
+          Text(
+            '注意力模式 · 全為本機模擬來源',
+            style: cockpitText(13, color: CockpitStyle.accent),
+          ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 14,
+            runSpacing: 4,
+            children: [
+              _sceneControl(
+                '人工駕駛（模擬）',
+                Icons.person_outline,
+                () => _setDrivingMode(CabinDrivingMode.manual),
+              ),
+              _sceneControl(
+                '輔助駕駛（模擬）',
+                Icons.route_outlined,
+                () => _setDrivingMode(CabinDrivingMode.assisted),
+              ),
+              _sceneControl(
+                '接管提醒（模擬）',
+                Icons.front_hand_outlined,
+                () => _setDrivingMode(CabinDrivingMode.handoverRequested),
+              ),
+              _sceneControl(
+                drivingSourceOnline ? '中斷模式來源' : '恢復模式來源',
+                Icons.sync_problem_outlined,
+                () {
+                  drivingSourceOnline = !drivingSourceOnline;
+                  if (drivingSourceOnline) _sampleCoordinationSources();
+                  setState(() {});
+                },
+              ),
+            ],
+          ),
+          Text(
+            '輔助駕駛仍須人全程注意；解除提醒不會自動執行需求。來源中斷超過 3 秒會阻擋確認。',
+            style: cockpitText(11, color: CockpitStyle.muted),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            '能力設定 · ${policy!.profile.label}',
+            style: cockpitText(13, color: CockpitStyle.accent),
+          ),
+          Wrap(
+            spacing: 14,
+            children: [
+              _sceneControl(
+                '座艙 A · 三項可控',
+                Icons.directions_car_outlined,
+                () => _switchCabinProfile(CabinProfile.a),
+              ),
+              _sceneControl(
+                '座艙 B · 後風無介面',
+                Icons.directions_car_outlined,
+                () => _switchCabinProfile(CabinProfile.b),
+              ),
+            ],
+          ),
+          Text(
+            sessionNotice ?? '僅在模擬停車且需求已結束／取消時切換；切換後需重新配對與授權。',
+            style: cockpitText(11, color: CockpitStyle.muted),
+          ),
+        ],
       ],
     ),
   );
@@ -977,6 +1200,9 @@ class _RepairScreenState extends State<RepairScreen> {
         task.phase == RepairPhase.failed;
     final canCancel = task.phase == RepairPhase.parsing || revising;
     final canInput = !busy && (!revising || collaboration.canRevise);
+    final contextData = policy?.toJson();
+    final blocked = cabinAttentionBlocked(contextData);
+    final unsupported = cabinUnsupported(contextData);
     final tone = task.phase == RepairPhase.completed
         ? CockpitStyle.accent
         : CockpitStyle.amber;
@@ -998,7 +1224,13 @@ class _RepairScreenState extends State<RepairScreen> {
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  revising ? '只改這一項，其餘保留' : '先提出需求，駕駛來確認',
+                  blocked && revising
+                      ? '需求保留，先讓駕駛專注'
+                      : unsupported.isNotEmpty && revising
+                      ? '有一項這台車不能做'
+                      : revising
+                      ? '只改這一項，其餘保留'
+                      : '先提出需求，駕駛來確認',
                   style: cockpitText(27, weight: FontWeight.w400),
                 ),
                 const SizedBox(height: 12),
@@ -1165,6 +1397,8 @@ class _RepairScreenState extends State<RepairScreen> {
                     canRevise:
                         collaboration.canRevise && !busy && !speechListening,
                     changedSettings: changedSettings,
+                    unsupported: unsupported,
+                    removedSettings: removedSettings,
                     onPatch: (setting, change) =>
                         collaboration.directPatch(setting, change),
                   ),
@@ -1226,7 +1460,13 @@ class _RepairScreenState extends State<RepairScreen> {
                   children: [
                     Text(
                       revising
-                          ? '等待駕駛確認'
+                          ? blocked
+                                ? '駕駛確認暫停 · 需求已保留'
+                                : unsupported.isNotEmpty
+                                ? '先處理受限項目 · 其餘保留'
+                                : policy?.resumeRequired == true
+                                ? '等待駕駛確認最新內容'
+                                : '等待駕駛確認'
                           : task.phase == RepairPhase.completed
                           ? '駕駛已確認 · 模擬回報已收到'
                           : '候選不會直接執行',
@@ -1296,7 +1536,12 @@ class _RepairScreenState extends State<RepairScreen> {
               setting: setting,
               value: task.phase == RepairPhase.indeterminate
                   ? null
+                  : policy != null &&
+                        !policy!.profile.readable.contains(setting)
+                  ? null
                   : actuator.state[setting],
+              readable:
+                  policy == null || policy!.profile.readable.contains(setting),
               pending: task.phase == RepairPhase.awaitingConfirmation
                   ? task.pending[setting]
                   : null,
@@ -1309,10 +1554,16 @@ class _RepairScreenState extends State<RepairScreen> {
 }
 
 class _LevelTile extends StatelessWidget {
-  const _LevelTile({required this.setting, required this.value, this.pending});
+  const _LevelTile({
+    required this.setting,
+    required this.value,
+    this.pending,
+    this.readable = true,
+  });
   final CabinSetting setting;
   final int? value;
   final RequestedChange? pending;
+  final bool readable;
 
   @override
   Widget build(BuildContext context) => Column(
@@ -1334,7 +1585,9 @@ class _LevelTile extends StatelessWidget {
             style: cockpitText(30, weight: FontWeight.w300, height: 1),
           ),
           Text(
-            ' / ${setting == CabinSetting.rearFan ? 7 : 10}',
+            readable
+                ? ' / ${setting == CabinSetting.rearFan ? 7 : 10}'
+                : ' / 不提供',
             style: cockpitText(11, color: CockpitStyle.muted),
           ),
         ],

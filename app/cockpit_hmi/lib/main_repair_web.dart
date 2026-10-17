@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import 'cockpit_alert_slot.dart';
+import 'cabin_coordination_widgets.dart';
 import 'cockpit_design.dart';
 import 'cockpit_instruments.dart';
 import 'protocol.dart';
@@ -63,11 +64,34 @@ class _RepairMonitorState extends State<RepairMonitor> {
   String? speechNotice;
 
   bool get isDriver => frameFresh && status?['role'] == 'driver';
+  Map? get cabinContext {
+    if (status?['schema'] != 2) return null;
+    final value = status?['cabin_context'];
+    return value is Map ? value : const {};
+  }
+
+  String _confirmationIdentity(Map task) =>
+      '${task['task_id']}:${task['revision']}:'
+      '${cabinContext?['cabin_session_id']}:${cabinContext?['profile_id']}:'
+      '${cabinContext?['profile_revision']}:${cabinContext?['attention_epoch']}';
+  bool get validCabinContext {
+    if (status?['schema'] != 2) return true;
+    final c = cabinContext;
+    return c?['cabin_session_id'] is String &&
+        '${c?['cabin_session_id']}'.isNotEmpty &&
+        c?['profile_id'] is String &&
+        c?['profile_revision'] is int &&
+        c?['attention_epoch'] is int &&
+        c?['attention'] is Map &&
+        c?['profile'] is Map &&
+        c?['capability'] is Map;
+  }
+
   bool get confirmationInFlight {
     final task = status?['task'];
     return task is Map &&
         task['phase'] == 'awaitingConfirmation' &&
-        confirmationKey == '${task['task_id']}:${task['revision']}';
+        confirmationKey == _confirmationIdentity(task);
   }
 
   bool get frameFresh =>
@@ -80,9 +104,15 @@ class _RepairMonitorState extends State<RepairMonitor> {
   void trackSafetyTransition() {
     final event = _parseCockpitEvent(status?['cockpit_event']);
     final urgent =
+        (frameFresh && cabinAttentionBlocked(cabinContext)) ||
         _cockpitEventFresh(event, frameFresh) &&
-        event!.decision.urgency == Urgency.safety;
-    if (urgent && !safetyActive) selectedView = 0;
+            event!.decision.urgency == Urgency.safety;
+    if (urgent && !safetyActive) {
+      selectedView = 0;
+      unawaited(feedback.stop().catchError((Object _) {}));
+      speechBusy = false;
+      speechNotice = null;
+    }
     safetyActive = urgent;
   }
 
@@ -150,7 +180,8 @@ class _RepairMonitorState extends State<RepairMonitor> {
                   commandError = m['accepted'] == true
                       ? null
                       : '${m['error'] ?? '操作未受理。'}';
-                  if (action == 'confirm' && m['accepted'] != true) {
+                  if ((action == 'confirm' || action == 'resume_confirm') &&
+                      m['accepted'] != true) {
                     confirmationKey = null;
                   }
                   commandNotice = m['accepted'] == true
@@ -159,6 +190,7 @@ class _RepairMonitorState extends State<RepairMonitor> {
                           'grant' => '授權已受理；乘客可修改本次需求。',
                           'revoke' => '收回授權已受理。',
                           'confirm' => '確認已受理，等待模擬執行回報。',
+                          'resume_confirm' => '最新需求已確認，等待模擬執行回報。',
                           'cancel' => '取消已受理；狀態以最新同步為準。',
                           _ => null,
                         }
@@ -170,7 +202,7 @@ class _RepairMonitorState extends State<RepairMonitor> {
             if (attempt == generation &&
                 m is Map &&
                 m['type'] == 'repair_status' &&
-                m['schema'] == 1 &&
+                (m['schema'] == 1 || m['schema'] == 2) &&
                 m['task'] is Map) {
               if (mounted) {
                 final previousTask = status?['task'];
@@ -184,12 +216,28 @@ class _RepairMonitorState extends State<RepairMonitor> {
                     nextTask['phase'] == 'completed' &&
                     (previousTask is! Map ||
                         previousTask['phase'] != 'completed');
+                final previousContext = cabinContext;
+                final nextContext = m['cabin_context'];
+                final sessionChanged =
+                    previousContext is Map &&
+                    nextContext is Map &&
+                    previousContext['cabin_session_id'] !=
+                        nextContext['cabin_session_id'];
                 setState(() {
                   if (!online && commandError == '連線中斷；恢復後請重新配對。') {
                     commandError = null;
                     commandNotice = '連線已恢復，請重新配對後操作。';
                   }
                   status = Map<String, dynamic>.from(m);
+                  if (sessionChanged) {
+                    pendingCommandId = null;
+                    pendingAction = null;
+                    confirmationKey = null;
+                    lastHeartbeatAt = null;
+                    commandError = null;
+                    commandNotice = '能力設定已切換，請重新配對。';
+                    replyWatch?.cancel();
+                  }
                   _capturePendingChanges();
                   lastAt = DateTime.now();
                   online = true;
@@ -271,7 +319,7 @@ class _RepairMonitorState extends State<RepairMonitor> {
     if (task is! Map) return;
     final next = task['pending'] is Map ? task['pending'] as Map : const {};
     if (task['phase'] != 'awaitingConfirmation' ||
-        confirmationKey != '${task['task_id']}:${task['revision']}') {
+        confirmationKey != _confirmationIdentity(task)) {
       confirmationKey = null;
     }
     if (task['task_id'] != previousTaskId) {
@@ -296,17 +344,21 @@ class _RepairMonitorState extends State<RepairMonitor> {
 
   void sendCommand(String action, {String? pairingCode}) {
     if (!frameFresh ||
+        !validCabinContext ||
         channel == null ||
         (action != 'heartbeat' && pendingCommandId != null)) {
       return;
     }
     if (action != 'pair_driver' && !isDriver) return;
-    if (action == 'confirm' && confirmationInFlight) return;
+    final confirming = action == 'confirm' || action == 'resume_confirm';
+    if (confirming && confirmationInFlight) return;
     final payload = <String, dynamic>{
       'type': 'repair_command',
       'command_id':
           'driver_${DateTime.now().microsecondsSinceEpoch}_${++commandNumber}',
       'action': action,
+      if (status?['schema'] == 2)
+        'cabin_session_id': cabinContext!['cabin_session_id'],
     };
     if (action == 'pair_driver') {
       if (pairingCode == null || !RegExp(r'^\d{6}$').hasMatch(pairingCode)) {
@@ -320,19 +372,24 @@ class _RepairMonitorState extends State<RepairMonitor> {
           task['revision'] is! int) {
         return;
       }
-      if (action == 'confirm' && task['phase'] != 'awaitingConfirmation') {
+      if (confirming && task['phase'] != 'awaitingConfirmation') {
         return;
       }
       payload['task_id'] = task['task_id'];
       payload['revision'] = task['revision'];
+      if (status?['schema'] == 2) {
+        payload['profile_id'] = cabinContext!['profile_id'];
+        payload['profile_revision'] = cabinContext!['profile_revision'];
+        payload['attention_epoch'] = cabinContext!['attention_epoch'];
+      }
     }
     try {
       if (action != 'heartbeat') {
         setState(() {
           pendingCommandId = payload['command_id'] as String;
           pendingAction = action;
-          if (action == 'confirm') {
-            confirmationKey = '${payload['task_id']}:${payload['revision']}';
+          if (confirming) {
+            confirmationKey = _confirmationIdentity(status!['task'] as Map);
           }
           commandError = null;
           commandNotice = '操作已送出，等待主控回覆。';
@@ -357,16 +414,25 @@ class _RepairMonitorState extends State<RepairMonitor> {
   }
 
   String? _completedResultText() {
-    if (!frameFresh) return null;
+    if (!frameFresh || cabinAttentionBlocked(cabinContext)) return null;
     final task = status?['task'];
     if (task is! Map) return null;
-    final state = completedSimulatedCabinState(task);
+    final state = completedSimulatedCabinState(
+      task,
+      cabinContext: cabinContext,
+    );
     if (state == null) return null;
     final fan = _readLevel(state, 'rearFan', 7);
     final music = _readLevel(state, 'mediaVolume', 10);
     final navigation = _readLevel(state, 'navVolume', 10);
-    if (fan == null || music == null || navigation == null) return null;
-    return '模擬設定已套用。後座風量$fan，音樂音量$music，導航音量$navigation。';
+    if (music == null ||
+        navigation == null ||
+        (cabinSettingReadable(cabinContext, 'rearFan') && fan == null)) {
+      return null;
+    }
+    return '模擬設定已套用。'
+        '${cabinSettingReadable(cabinContext, 'rearFan') ? '後座風量$fan，' : '此車未提供後座風量介面，'}'
+        '音樂音量$music，導航音量$navigation。';
   }
 
   Future<void> _speakResult() async {
@@ -377,7 +443,11 @@ class _RepairMonitorState extends State<RepairMonitor> {
       speechNotice = null;
     });
     try {
-      final available = await feedback.speak(text);
+      final available = await feedback.speak(
+        text,
+        allowed: () =>
+            mounted && frameFresh && !cabinAttentionBlocked(cabinContext),
+      );
       if (mounted) {
         speechNotice = available ? '已使用本機離線語音播報模擬回報。' : '離線語音尚未就緒，請閱讀文字結果。';
       }
@@ -396,7 +466,9 @@ class _RepairMonitorState extends State<RepairMonitor> {
     final task = status?['task'] as Map? ?? const {};
     final result = task['result'] as Map?;
     final phase = task['phase'];
-    final completed = fresh && completedSimulatedCabinState(task) != null;
+    final completed =
+        fresh &&
+        completedSimulatedCabinState(task, cabinContext: cabinContext) != null;
     // Once freshness is lost, neither a previous receipt nor cached cabin state
     // is presented as current. The reconnecting shell stays visible on its own.
     final cabinState = !fresh || phase == 'indeterminate'
@@ -433,6 +505,7 @@ class _RepairMonitorState extends State<RepairMonitor> {
               onSpeak: _completedResultText() == null ? null : _speakResult,
               speechBusy: speechBusy,
               speechNotice: speechNotice,
+              cabinContext: cabinContext,
             );
             final viewSwitch = _MonitorViews(
               selected: selectedView,
@@ -497,7 +570,7 @@ class _RepairMonitorState extends State<RepairMonitor> {
                                   fresh: cockpitFresh,
                                   height: panelHeight,
                                 )
-                              : completed
+                              : completed || cabinAttentionBlocked(cabinContext)
                               ? statusPanel
                               : wide
                               ? Row(
@@ -510,6 +583,7 @@ class _RepairMonitorState extends State<RepairMonitor> {
                                       child: _MonitorLevels(
                                         state: cabinState,
                                         wide: false,
+                                        cabinContext: cabinContext,
                                       ),
                                     ),
                                   ],
@@ -523,6 +597,7 @@ class _RepairMonitorState extends State<RepairMonitor> {
                                     _MonitorLevels(
                                       state: cabinState,
                                       wide: false,
+                                      cabinContext: cabinContext,
                                     ),
                                   ],
                                 ),
@@ -530,6 +605,15 @@ class _RepairMonitorState extends State<RepairMonitor> {
                       },
                     ),
                   ),
+                  if (cabinContext != null)
+                    CabinAttentionStrip(
+                      contextData: cabinContext,
+                      completed: completed,
+                      onViewSummary: () {
+                        setState(() => selectedView = 1);
+                        _returnToSummaryTop();
+                      },
+                    ),
                   SizedBox(height: shortLandscape ? 8 : 12),
                   const Text(
                     '配對與授權為實作 · 行車訊號與車控為模擬',
@@ -713,9 +797,14 @@ class _MonitorHeader extends StatelessWidget {
 }
 
 class _MonitorLevels extends StatelessWidget {
-  const _MonitorLevels({required this.state, required this.wide});
+  const _MonitorLevels({
+    required this.state,
+    required this.wide,
+    this.cabinContext,
+  });
   final Map? state;
   final bool wide;
+  final Map? cabinContext;
 
   @override
   Widget build(BuildContext context) {
@@ -723,8 +812,11 @@ class _MonitorLevels extends StatelessWidget {
       _MonitorLevel(
         label: '後座風量',
         icon: Icons.air_rounded,
-        value: _readLevel(state, 'rearFan', 7),
+        value: cabinSettingReadable(cabinContext, 'rearFan')
+            ? _readLevel(state, 'rearFan', 7)
+            : null,
         max: 7,
+        readable: cabinSettingReadable(cabinContext, 'rearFan'),
       ),
       _MonitorLevel(
         label: '音樂音量',
@@ -793,11 +885,13 @@ class _MonitorLevel extends StatelessWidget {
     required this.icon,
     required this.value,
     required this.max,
+    this.readable = true,
   });
   final String label;
   final IconData icon;
   final int? value;
   final int max;
+  final bool readable;
 
   @override
   Widget build(BuildContext context) => Column(
@@ -822,7 +916,7 @@ class _MonitorLevel extends StatelessWidget {
           ),
           const SizedBox(width: 5),
           Text(
-            '/ $max',
+            readable ? '/ $max' : '/ 不提供',
             style: const TextStyle(color: CockpitStyle.muted, fontSize: 10),
           ),
         ],

@@ -1,10 +1,12 @@
-# Rebuild one isolated Hybrid V3 APK. Does not install, launch, upgrade or train.
+﻿# Rebuild one isolated Hybrid V3 APK. Does not install, launch, upgrade or train.
 [CmdletBinding()]
 param(
     [ValidateSet('Native', 'PC', 'Driver')][string]$Mode = 'Native',
+    [switch]$Coordination,
     [string]$FlutterPath = '',
     [string]$SdkRoot = '',
     [string]$JavaHome = '',
+    [string]$PythonPath = '',
     [string]$DeviceUrl = 'ws://10.0.2.2:8767/repair'
 )
 
@@ -24,7 +26,7 @@ if (-not $taskRepoRoot.Equals($taskJunctionTarget, [StringComparison]::OrdinalIg
     throw 'The ASCII hybrid junction points to another checkout. No build was started.'
 }
 $taskAppRoot = Join-Path $taskAsciiRepo 'app\cockpit_hmi'
-$taskOutputRoot = Join-Path $taskAsciiRepo '.local\hybrid-v3'
+$taskOutputRoot = Join-Path $taskAsciiRepo $(if ($Coordination) { '.local\cabin-c' } else { '.local\hybrid-v3' })
 if ([string]::IsNullOrWhiteSpace($FlutterPath)) {
     $FlutterPath = Join-Path $taskProfile 'codex-dev\flutter-3.35.2\flutter\bin\flutter.bat'
 }
@@ -33,6 +35,9 @@ if ([string]::IsNullOrWhiteSpace($SdkRoot)) {
 }
 if ([string]::IsNullOrWhiteSpace($JavaHome)) {
     $JavaHome = Join-Path $taskProfile 'codex-dev\jdk17\jdk-17.0.20.1+1'
+}
+if ([string]::IsNullOrWhiteSpace($PythonPath)) {
+    $PythonPath = Join-Path $taskProfile '.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe'
 }
 foreach ($taskRequired in @($FlutterPath, (Join-Path $JavaHome 'bin\java.exe'))) {
     if (-not (Test-Path -LiteralPath $taskRequired -PathType Leaf)) { throw "Missing tool: $taskRequired" }
@@ -73,11 +78,22 @@ try {
     if ($taskVersion -notmatch '(?m)^Flutter 3\.35\.2\b') {
         throw "Flutter 3.35.2 is required. Select its flutter.bat with -FlutterPath.`n$taskVersion"
     }
+    if ($Coordination -and $Mode -ne 'Driver') {
+        if (-not (Test-Path -LiteralPath $PythonPath -PathType Leaf)) {
+            throw 'Python is required to bundle the C driver web companion; select it with -PythonPath.'
+        }
+        & $FlutterPath build web --release --no-pub -t lib/main_repair_web.dart --output=build/repair_web --no-web-resources-cdn --pwa-strategy=none --dart-define=CABIN_COORDINATION=true
+        if ($LASTEXITCODE -ne 0) { throw 'C driver web build failed; no new host APK was produced.' }
+        & $PythonPath -X utf8 tool/pack_repair_web.py
+        if ($LASTEXITCODE -ne 0) { throw 'C web asset packaging failed; no new host APK was produced.' }
+    }
     $taskArguments = @(
         'build', 'apk', '--release', '--no-pub',
-        '--build-name=1.1.0', '--build-number=2026101701',
+        $(if ($Coordination) { '--build-name=1.2.0' } else { '--build-name=1.1.0' }),
+        $(if ($Coordination) { '--build-number=2026101702' } else { '--build-number=2026101701' }),
         '--dart-define=HYBRID_V3_DEMO=true'
     )
+    if ($Coordination) { $taskArguments += '--dart-define=CABIN_COORDINATION=true' }
     switch ($Mode) {
         'Native' {
             $taskArguments += @(
@@ -103,6 +119,7 @@ try {
             $taskOutputName = 'hybrid-v3-driver-arm64-x64.apk'
         }
     }
+    if ($Coordination) { $taskOutputName = $taskOutputName.Replace('hybrid-v3-', 'cabin-c-') }
     Write-Output "Building Hybrid V3 $Mode with cached dependencies. No pub upgrade or installation is performed."
     & $FlutterPath @taskArguments
     if ($LASTEXITCODE -ne 0) { throw "Flutter $Mode build failed with exit code $LASTEXITCODE." }
@@ -119,7 +136,10 @@ try {
         CreatedAt = (Get-Date).ToString('o'); Mode = $Mode
         Apk = $taskDestination; Bytes = (Get-Item -LiteralPath $taskDestination).Length
         Sha256 = (Get-FileHash -LiteralPath $taskDestination -Algorithm SHA256).Hash.ToLowerInvariant()
-        Flutter = '3.35.2'; VersionName = '1.1.0'; VersionCode = 2026101701
+        Flutter = '3.35.2'
+        VersionName = $(if ($Coordination) { '1.2.0' } else { '1.1.0' })
+        VersionCode = $(if ($Coordination) { 2026101702 } else { 2026101701 })
+        Coordination = [bool]$Coordination
         Arguments = $taskArguments; Installed = $false; S9Tested = $false
     }
     $taskReceipt | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath "$taskDestination.receipt.json" -Encoding UTF8

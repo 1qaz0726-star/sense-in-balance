@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 
 import 'repair_task.dart';
 import 'repair_collaboration.dart';
+import 'cabin_policy.dart';
 
 /// Read-only by default. With an explicit collaboration layer, one paired
 /// driver may grant edits and confirm this passenger's current task.
@@ -18,6 +19,7 @@ class RepairHub {
     this.cockpitEvent,
     this.cockpitSignals,
     this.collaboration,
+    this.listenPort = port,
   });
   final RepairController controller;
   final String Function() modelStatus;
@@ -26,6 +28,8 @@ class RepairHub {
   final Map<String, dynamic>? Function()? cockpitEvent;
   final Listenable? cockpitSignals;
   final RepairCollaboration? collaboration;
+  final int listenPort;
+  int? get boundPort => _server?.port;
   HttpServer? _server;
   Timer? _heartbeat;
   int _generation = 0;
@@ -36,26 +40,40 @@ class RepairHub {
   List<String> addresses = [];
   static const port = 8767;
 
-  Map<String, dynamic> status({Object? peer}) => {
-    'type': 'repair_status',
-    'schema': 1,
-    'at': DateTime.now().millisecondsSinceEpoch,
-    'model': modelStatus(),
-    'mode': '文字輸入／車控模擬',
-    if (cabinState != null) 'cabin_state': cabinState!(),
-    if (cockpitEvent != null) 'cockpit_event': cockpitEvent!(),
-    'task': controller.snapshot.toJson(),
-    if (collaboration != null)
-      'role': peer != null && collaboration!.isDriver(peer)
-          ? 'driver'
-          : 'observer',
-    if (collaboration != null) 'collaboration': collaboration!.toJson(),
-  };
+  Map<String, dynamic> status({Object? peer}) {
+    final policy = collaboration?.policy;
+    policy?.refresh();
+    final state = cabinState?.call();
+    return {
+      'type': 'repair_status',
+      'schema': policy == null ? 1 : 2,
+      'at': DateTime.now().millisecondsSinceEpoch,
+      'model': modelStatus(),
+      'mode': '文字輸入／車控模擬',
+      if (state != null)
+        'cabin_state': {
+          for (final entry in state.entries)
+            entry.key:
+                policy == null ||
+                    policy.profile.readable.any((s) => s.name == entry.key)
+                ? entry.value
+                : null,
+        },
+      if (policy != null) 'cabin_context': policy.toJson(),
+      if (cockpitEvent != null) 'cockpit_event': cockpitEvent!(),
+      'task': controller.snapshot.toJson(),
+      if (collaboration != null)
+        'role': peer != null && collaboration!.isDriver(peer)
+            ? 'driver'
+            : 'observer',
+      if (collaboration != null) 'collaboration': collaboration!.toJson(),
+    };
+  }
 
   Future<void> start() async {
     if (_server != null) return;
     final generation = ++_generation;
-    final server = await HttpServer.bind(InternetAddress.anyIPv4, port);
+    final server = await HttpServer.bind(InternetAddress.anyIPv4, listenPort);
     if (generation != _generation) {
       await server.close(force: true);
       return;
@@ -226,19 +244,28 @@ class RepairHub {
         if (!keys.add(key)) throw const FormatException('指令不得有重複欄位。');
       }
       final action = decoded['action'];
+      final policy = c.policy;
+      final taskAction = const {
+        'grant',
+        'revoke',
+        'confirm',
+        'resume_confirm',
+        'cancel',
+      }.contains(action);
       final allowed = <String>{
         'type',
         'command_id',
         'action',
+        if (policy != null) 'cabin_session_id',
         if (action == 'pair_driver') 'pairing_code',
-        if (const {
-          'grant',
-          'revoke',
-          'confirm',
-          'cancel',
-        }.contains(action)) ...[
+        if (taskAction) ...[
           'task_id',
           'revision',
+          if (policy != null) ...[
+            'profile_id',
+            'profile_revision',
+            'attention_epoch',
+          ],
         ],
       };
       if (id == null ||
@@ -251,9 +278,31 @@ class RepairHub {
             'grant',
             'revoke',
             'confirm',
+            'resume_confirm',
             'cancel',
           }.contains(action)) {
         throw const FormatException('不支援的指令或欄位。');
+      }
+      CabinContextIdentity? context;
+      final sessionId = decoded['cabin_session_id'];
+      if (policy != null) {
+        policy.refresh();
+        if (sessionId is! String || sessionId != policy.sessionId) {
+          throw const FormatException('座艙工作階段已更換，請重新配對。');
+        }
+        if (taskAction) {
+          context = CabinContextIdentity.fromJson({
+            'cabin_session_id': sessionId,
+            'profile_id': decoded['profile_id'],
+            'profile_revision': decoded['profile_revision'],
+            'attention_epoch': decoded['attention_epoch'],
+          });
+          if (context == null || !policy.matches(context)) {
+            throw const FormatException('模式或車型狀態已更新，請查看最新摘要。');
+          }
+        }
+      } else if (action == 'resume_confirm') {
+        throw const FormatException('本工作階段未啟用模式續辦。');
       }
       final canonical = Map.fromEntries(
         decoded.entries.toList()..sort((a, b) => a.key.compareTo(b.key)),
@@ -277,7 +326,11 @@ class RepairHub {
         if (peer.blockedUntil != null && now.isBefore(peer.blockedUntil!)) {
           error = '配對嘗試過多，請稍後再試。';
         } else {
-          accepted = c.pairDriver(socket, code);
+          accepted = c.pairDriver(
+            socket,
+            code,
+            sessionId: sessionId is String ? sessionId : null,
+          );
           if (accepted) {
             peer.failedPairings = 0;
           } else {
@@ -289,7 +342,10 @@ class RepairHub {
           }
         }
       } else if (action == 'heartbeat') {
-        accepted = c.heartbeat(socket);
+        accepted = c.heartbeat(
+          socket,
+          sessionId: sessionId is String ? sessionId : null,
+        );
         if (!accepted) error = c.error;
       } else {
         final taskId = decoded['task_id'];
@@ -302,10 +358,22 @@ class RepairHub {
           throw const FormatException('需求 ID 與版本不合法。');
         }
         accepted = switch (action) {
-          'grant' => c.grant(socket, taskId, revision),
-          'revoke' => c.revoke(socket, taskId, revision),
-          'confirm' => c.confirm(socket, taskId, revision),
-          'cancel' => c.cancelByDriver(socket, taskId, revision),
+          'grant' => c.grant(socket, taskId, revision, context: context),
+          'revoke' => c.revoke(socket, taskId, revision, context: context),
+          'confirm' => c.confirm(socket, taskId, revision, context: context),
+          'resume_confirm' => c.confirm(
+            socket,
+            taskId,
+            revision,
+            context: context,
+            resume: true,
+          ),
+          'cancel' => c.cancelByDriver(
+            socket,
+            taskId,
+            revision,
+            context: context,
+          ),
           _ => false,
         };
         if (!accepted) error = c.error;

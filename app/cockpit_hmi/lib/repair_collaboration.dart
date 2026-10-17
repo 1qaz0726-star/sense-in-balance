@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 
 import 'repair_task.dart';
+import 'cabin_policy.dart';
 
 /// One passenger drafts/edits; one paired driver grants and confirms.
 /// This is deliberately not ownership handoff or shared-setting arbitration.
@@ -15,18 +16,24 @@ class RepairCollaboration extends ChangeNotifier {
     this.heartbeatTimeout = const Duration(seconds: 6),
     // Explicit unit-test override; production UI must leave this unset.
     bool? demoFaultsForTesting,
+    this.policy,
   }) : _clock = clock ?? DateTime.now,
        _demoFaultAllowed =
            demoFaultsForTesting ??
            const bool.fromEnvironment('REPAIR_DESKTOP_DEMO') {
+    _lastObservedClock = _clock();
     _pairingCode = _newCode();
     _previousGuard = controller.confirmationGuard;
     _guard = (id, revision) =>
         _confirmingDriver &&
         driverOnline &&
+        (policy == null ||
+            (policy!.executionReady &&
+                (!policy!.resumeRequired || _admittingResume))) &&
         (_previousGuard?.call(id, revision) ?? true);
     controller.confirmationGuard = _guard;
     controller.addListener(_taskChanged);
+    policy?.addListener(_policyChanged);
     _watch = Timer.periodic(
       const Duration(milliseconds: 500),
       (_) => checkTimeouts(),
@@ -34,6 +41,7 @@ class RepairCollaboration extends ChangeNotifier {
   }
 
   final RepairController controller;
+  final CabinPolicy? policy;
   final DateTime Function() _clock;
   final Duration authorizationDuration;
   final Duration heartbeatTimeout;
@@ -45,10 +53,13 @@ class RepairCollaboration extends ChangeNotifier {
   bool Function(String, int)? _previousGuard;
   Object? _driver;
   DateTime? _lastHeartbeat;
+  late DateTime _lastObservedClock;
+  bool _clockReliable = true;
   String? _authorizedTaskId;
   DateTime? _authorizationExpires;
   Timer? _watch;
   bool _confirmingDriver = false;
+  bool _admittingResume = false;
   bool _disposed = false;
   String? error;
   void Function(Object driver)? onDriverExpired;
@@ -56,10 +67,16 @@ class RepairCollaboration extends ChangeNotifier {
   String _newCode() =>
       Random.secure().nextInt(1000000).toString().padLeft(6, '0');
   String get pairingCode => _pairingCode;
-  bool get driverOnline =>
-      _driver != null &&
-      _lastHeartbeat != null &&
-      _clock().difference(_lastHeartbeat!) < heartbeatTimeout;
+  bool get driverOnline {
+    final now = _clock();
+    return _clockReliable &&
+        !now.isBefore(_lastObservedClock) &&
+        _driver != null &&
+        _lastHeartbeat != null &&
+        !now.isBefore(_lastHeartbeat!) &&
+        now.difference(_lastHeartbeat!) < heartbeatTimeout;
+  }
+
   bool isDriver(Object peer) => identical(peer, _driver) && driverOnline;
   bool get canRevise =>
       !_disposed &&
@@ -133,10 +150,30 @@ class RepairCollaboration extends ChangeNotifier {
     _notify();
   }
 
+  void _policyChanged() => _notify();
+
   /// Called by the watchdog and synchronously before every command. Tests can
   /// advance an injected clock without sleeps or touching a running demo port.
   void checkTimeouts() {
     if (_disposed) return;
+    policy?.refresh();
+    final now = _clock();
+    final wasClockReliable = _clockReliable;
+    _clockReliable = !now.isBefore(_lastObservedClock);
+    if (!_clockReliable) {
+      if (wasClockReliable || _driver != null || _authorizedTaskId != null) {
+        final expired = _driver;
+        _driver = null;
+        _lastHeartbeat = null;
+        _pairingCode = _newCode();
+        _release();
+        error = '裝置時間發生倒退，修正授權已收回；時間確認後請重新配對。';
+        if (expired != null) onDriverExpired?.call(expired);
+        _notify();
+      }
+      return;
+    }
+    _lastObservedClock = now;
     if (_driver != null && !driverOnline) {
       final expired = _driver!;
       _driver = null;
@@ -154,9 +191,13 @@ class RepairCollaboration extends ChangeNotifier {
     }
   }
 
-  bool pairDriver(Object peer, String code) {
+  bool pairDriver(Object peer, String code, {String? sessionId}) {
     checkTimeouts();
     if (_disposed) return false;
+    if (!_clockReliable) return _reject('裝置時間尚未確認，請稍後重新配對。');
+    if (policy != null && !policy!.matchesSession(sessionId)) {
+      return _reject('座艙場景已更新，請重新查看配對碼。');
+    }
     if (_driver != null && !identical(_driver, peer)) {
       return _reject('已有駕駛端配對。');
     }
@@ -168,16 +209,27 @@ class RepairCollaboration extends ChangeNotifier {
     return true;
   }
 
-  bool heartbeat(Object peer) {
+  bool heartbeat(Object peer, {String? sessionId}) {
     checkTimeouts();
+    if (policy != null && !policy!.matchesSession(sessionId)) {
+      return _reject('座艙場景已更新，請重新配對。');
+    }
     if (!isDriver(peer)) return _reject('請先配對駕駛端。');
     _lastHeartbeat = _clock();
     return true;
   }
 
-  bool _current(Object peer, String taskId, int revision) {
+  bool _current(
+    Object peer,
+    String taskId,
+    int revision, {
+    CabinContextIdentity? context,
+  }) {
     checkTimeouts();
     if (_disposed) return false;
+    if (policy != null && !policy!.matches(context)) {
+      return _reject('座艙或注意力狀態已更新，請查看最新摘要。');
+    }
     if (!isDriver(peer)) return _reject('此連線沒有駕駛操作權限。');
     final task = controller.snapshot;
     if (task.taskId != taskId || task.revision != revision) {
@@ -186,8 +238,16 @@ class RepairCollaboration extends ChangeNotifier {
     return true;
   }
 
-  bool grant(Object peer, String taskId, int revision) {
-    if (!_current(peer, taskId, revision)) return false;
+  bool grant(
+    Object peer,
+    String taskId,
+    int revision, {
+    CabinContextIdentity? context,
+  }) {
+    if (!_current(peer, taskId, revision, context: context)) return false;
+    if (policy != null && !policy!.canGrant) {
+      return _reject('優先事件或模式訊號尚未解除，暫停新的修正授權。');
+    }
     if (!const {
       RepairPhase.awaitingConfirmation,
       RepairPhase.awaitingClarification,
@@ -202,16 +262,36 @@ class RepairCollaboration extends ChangeNotifier {
     return true;
   }
 
-  bool revoke(Object peer, String taskId, int revision) {
-    if (!_current(peer, taskId, revision)) return false;
+  bool revoke(
+    Object peer,
+    String taskId,
+    int revision, {
+    CabinContextIdentity? context,
+  }) {
+    if (!_current(peer, taskId, revision, context: context)) return false;
     _release();
     error = null;
     _notify();
     return true;
   }
 
-  bool confirm(Object peer, String taskId, int revision) {
-    if (!_current(peer, taskId, revision)) return false;
+  bool confirm(
+    Object peer,
+    String taskId,
+    int revision, {
+    CabinContextIdentity? context,
+    bool resume = false,
+  }) {
+    if (!_current(peer, taskId, revision, context: context)) return false;
+    if (policy != null && !policy!.canConfirm(resume: resume)) {
+      return _reject(
+        policy!.blocked
+            ? '確認暫停；需求已保留，等待優先事件與模式訊號確認。'
+            : !policy!.capabilityReady
+            ? '本座艙有不支援項目，請明確修正後再確認。'
+            : '需求已保留，請以最新摘要明確繼續確認。',
+      );
+    }
     final task = controller.snapshot;
     if (task.phase != RepairPhase.awaitingConfirmation ||
         task.pending.isEmpty ||
@@ -221,19 +301,52 @@ class RepairCollaboration extends ChangeNotifier {
     }
     error = null;
     _confirmingDriver = true;
+    _admittingResume = resume;
     try {
       // Admission is synchronous; completion still comes from the real ACK
       // path. Neither a slow actuator nor a parser blocks safety broadcasts.
       unawaited(controller.confirm(taskId, revision));
+      if (!const {
+        RepairPhase.executing,
+        RepairPhase.indeterminate,
+      }.contains(controller.snapshot.phase)) {
+        return _reject('需求尚未準備好，未送出控制。');
+      }
+      policy?.markConfirmAdmitted();
     } finally {
       _confirmingDriver = false;
+      _admittingResume = false;
     }
     return true;
   }
 
-  bool cancelByDriver(Object peer, String taskId, int revision) {
-    if (!_current(peer, taskId, revision)) return false;
+  bool cancelByDriver(
+    Object peer,
+    String taskId,
+    int revision, {
+    CabinContextIdentity? context,
+  }) {
+    if (!_current(peer, taskId, revision, context: context)) return false;
     return cancel();
+  }
+
+  /// Privileged host demonstration setting. No socket command exposes this.
+  bool startCabinSession(CabinProfile profile, {required bool parked}) {
+    checkTimeouts();
+    if (_disposed ||
+        policy == null ||
+        !policy!.startSession(profile, parked: parked)) {
+      return _reject('請先停車並結束未完成需求；執行中或結果未知不能換場景。');
+    }
+    _driver = null;
+    _lastHeartbeat = null;
+    _pairingCode = _newCode();
+    _release(invalidate: false);
+    _demoFault = null;
+    _completedDemoFault = null;
+    error = null;
+    _notify();
+    return true;
   }
 
   void disconnectDriver(Object peer) {
@@ -329,6 +442,7 @@ class RepairCollaboration extends ChangeNotifier {
     _disposed = true;
     _watch?.cancel();
     controller.removeListener(_taskChanged);
+    policy?.removeListener(_policyChanged);
     _release();
     _driver = null;
     _lastHeartbeat = null;

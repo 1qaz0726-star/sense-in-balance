@@ -53,6 +53,14 @@ class Voice extends ChangeNotifier {
     } catch (_) {}
   }
 
+  /// Cancel queued nonurgent speech when the cabin's interaction mode changes.
+  /// Does not toggle the user's voice preference or announce task completion.
+  Future<void> stop() async {
+    try {
+      await _tts.stop();
+    } catch (_) {}
+  }
+
   void toggle(bool on) {
     enabled = on;
     if (!on) _tts.stop();
