@@ -1,10 +1,13 @@
 ﻿# Hybrid V3 desktop simulation: preserves original apps, models and AVD data.
 # The visible emulators are for manual operation; cloud credentials are not required.
 # Startup checks do not establish model quality, real vehicle actuation or S9 performance.
+# After exact AVD checks, only dash_phone's virtual clock is aligned to center_tab;
+# use -SkipClockSync to keep emulator clocks unchanged (freshness may then fail).
 [CmdletBinding()]
 param(
     [switch]$SkipInstall,
     [switch]$RestartApp,
+    [switch]$SkipClockSync,
     [string]$SdkRoot = (Join-Path $env:LOCALAPPDATA 'Android\Sdk'),
     [string]$ModelLauncher = '',
     [string]$ServerPath = '',
@@ -23,7 +26,21 @@ if ([string]::IsNullOrWhiteSpace($taskScriptRoot)) {
 if ([string]::IsNullOrWhiteSpace($taskScriptRoot)) {
     throw '無法取得助手檔案所在目錄；請以 -File 或 .cmd 執行本檔。'
 }
-$taskWorkspaceRoot = [System.IO.Path]::GetFullPath((Join-Path $taskScriptRoot '..\..'))
+$taskWorkspaceRoot = [System.IO.Path]::GetFullPath((Join-Path $taskScriptRoot '..\..')).TrimEnd('\')
+# aapt cannot reliably open APKs through this checkout's Chinese path. Use only
+# the dedicated ASCII junction after proving it refers to THIS exact checkout.
+$taskAsciiWorkspace = Join-Path ([Environment]::GetFolderPath('UserProfile')) 'codex-dev\sense-in-balance-hybrid-cloud'
+$taskAsciiItem = Get-Item -LiteralPath $taskAsciiWorkspace -Force -ErrorAction Stop
+$taskAsciiTargets = @($taskAsciiItem.Target)
+if ($taskAsciiItem.LinkType -ne 'Junction' -or $taskAsciiTargets.Count -ne 1) {
+    throw 'The dedicated ASCII hybrid checkout junction is missing or invalid; no startup was attempted.'
+}
+$taskAsciiTarget = [System.IO.Path]::GetFullPath([string]$taskAsciiTargets[0]).TrimEnd('\')
+if (-not $taskWorkspaceRoot.Equals($taskAsciiTarget, [StringComparison]::OrdinalIgnoreCase) -and
+    -not $taskWorkspaceRoot.Equals($taskAsciiWorkspace, [StringComparison]::OrdinalIgnoreCase)) {
+    throw 'The dedicated ASCII junction points to another checkout; no startup was attempted.'
+}
+$taskWorkspaceRoot = $taskAsciiWorkspace
 if ([string]::IsNullOrWhiteSpace($ModelLauncher)) {
     $ModelLauncher = Join-Path $taskScriptRoot 'start-hybrid-v3-model.ps1'
 }
@@ -318,6 +335,125 @@ function Wait-DemoBoot {
     throw "$($Definition.Name) 在 $BootTimeoutSeconds 秒內未完成開機；既有資料與程序皆保留。可稍後重跑助手。"
 }
 
+function Read-HybridVirtualClock {
+    param([string]$Serial)
+    if ($Serial -cnotin @('emulator-5554', 'emulator-5556')) {
+        throw 'Virtual clock sampling is restricted to the two designated emulator serials.'
+    }
+    $taskBefore = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+    $taskClock = Invoke-DemoAdb -Arguments @('-s', $Serial, 'shell', 'date', '+%s%3N') -TimeoutSeconds 5
+    $taskAfter = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+    if ($taskClock.Output -notmatch '^\d{13}$') {
+        throw "$Serial does not provide millisecond virtual-clock output; calibration cannot be verified."
+    }
+    if ($taskAfter -lt $taskBefore) { throw 'Host clock moved backwards during virtual-clock sampling.' }
+    return [pscustomobject]@{
+        Serial = $Serial
+        DeviceUnixMs = [long]$taskClock.Output
+        HostBeforeUnixMs = $taskBefore
+        HostAfterUnixMs = $taskAfter
+        HostMidpointUnixMs = ($taskBefore + $taskAfter) / 2.0
+        QueryDurationMs = $taskAfter - $taskBefore
+    }
+}
+
+function Measure-HybridClockDifference {
+    param($TabletSample, $PhoneSample)
+    # Normalize sequential readings to the same host instant. Half the measured
+    # round trips bound the sampling uncertainty; do not pretend queries are instant.
+    $taskDelta = ($PhoneSample.DeviceUnixMs - $TabletSample.DeviceUnixMs) -
+        ($PhoneSample.HostMidpointUnixMs - $TabletSample.HostMidpointUnixMs)
+    $taskUncertainty = ($TabletSample.QueryDurationMs + $PhoneSample.QueryDurationMs) / 2.0
+    return [pscustomobject]@{
+        PhoneAheadEstimateMs = $taskDelta
+        SamplingUncertaintyMs = $taskUncertainty
+        LowerBoundMs = $taskDelta - $taskUncertainty
+        UpperBoundMs = $taskDelta + $taskUncertainty
+        WithinBounds = (($taskDelta - $taskUncertainty) -ge 0 -and
+            ($taskDelta + $taskUncertainty) -le 2000)
+    }
+}
+
+function Sync-HybridVirtualClock {
+    # This is emulator setup only. Never change the Windows clock, a physical
+    # device, Android automatic-time settings or the product freshness policy.
+    if ($taskTabletSerial -cne 'emulator-5554' -or $taskPhoneSerial -cne 'emulator-5556') {
+        throw 'Virtual clock calibration requires exactly emulator-5554 and emulator-5556.'
+    }
+    Assert-AvdIdentity -Serial $taskTabletSerial -Name 'center_tab'
+    Assert-AvdIdentity -Serial $taskPhoneSerial -Name 'dash_phone'
+    $taskClockReceiptPath = Join-Path $taskLogRoot ('avd-clock-' + (Get-Date -Format 'yyyyMMdd-HHmmss-fff') + '.json')
+    $taskClockReceipt = [ordered]@{
+        schema_version = 1
+        kind = 'avd_virtual_clock_calibration'
+        created_utc = [DateTimeOffset]::UtcNow.ToString('o')
+        tablet_serial = $taskTabletSerial
+        tablet_avd = 'center_tab'
+        phone_serial = $taskPhoneSerial
+        phone_avd = 'dash_phone'
+        requested_phone_ahead_ms = 500
+        allowed_phone_ahead_ms = @(0, 2000)
+        pc_clock_changed = $false
+        tablet_clock_changed = $false
+        automatic_time_settings_changed = $false
+        phone_set_attempted = $false
+        status = 'not_started'
+    }
+    try {
+        if ($SkipClockSync) {
+            $taskClockReceipt.status = 'skipped_by_option'
+            Write-Warning 'SkipClockSync: virtual clocks were not calibrated. A phone behind the tablet can report stale/waiting data even with a healthy WebSocket.'
+            return
+        }
+        $taskReference = Read-HybridVirtualClock -Serial $taskTabletSerial
+        $taskOffset = $taskReference.DeviceUnixMs - $taskReference.HostMidpointUnixMs
+        $taskSetHostTime = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+        $taskTarget = [long][Math]::Round($taskSetHostTime + $taskOffset + 500)
+        $taskClockReceipt.reference_sample = $taskReference
+        $taskClockReceipt.tablet_minus_host_midpoint_ms = $taskOffset
+        $taskClockReceipt.set_request_host_unix_ms = $taskSetHostTime
+        $taskClockReceipt.requested_phone_unix_ms = $taskTarget
+        # Re-check the exact identities immediately before changing ONLY this AVD.
+        Assert-AvdIdentity -Serial $taskTabletSerial -Name 'center_tab'
+        Assert-AvdIdentity -Serial $taskPhoneSerial -Name 'dash_phone'
+        # Identity checks take time, so refresh the target from the measured offset.
+        $taskSetHostTime = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+        $taskTarget = [long][Math]::Round($taskSetHostTime + $taskOffset + 500)
+        $taskClockReceipt.set_request_host_unix_ms = $taskSetHostTime
+        $taskClockReceipt.requested_phone_unix_ms = $taskTarget
+        $taskClockReceipt.phone_set_attempted = $true
+        Write-Host 'Aligning only dash_phone virtual time to center_tab + 500 ms; PC/tablet clocks and automatic-time settings stay unchanged.'
+        $taskSet = Invoke-DemoAdb -Arguments @('-s', $taskPhoneSerial, 'shell', 'cmd', 'alarm', 'set-time', [string]$taskTarget) -TimeoutSeconds 10 -AllowFailure
+        $taskClockReceipt.set_exit_code = $taskSet.ExitCode
+        $taskClockReceipt.set_output = $taskSet.Output
+        $taskClockReceipt.set_error_output = $taskSet.ErrorOutput
+        if ($taskSet.ExitCode -ne 0 -or
+            ($taskSet.Output + "`n" + $taskSet.ErrorOutput) -match '(?im)error|exception|unknown command|not found|permission|usage:|unable|cannot|^false\s*$') {
+            throw 'The phone AVD does not support cmd alarm set-time or rejected it. Clock synchronization was not verified.'
+        }
+        $taskTabletAfter = Read-HybridVirtualClock -Serial $taskTabletSerial
+        $taskPhoneAfter = Read-HybridVirtualClock -Serial $taskPhoneSerial
+        $taskDifference = Measure-HybridClockDifference -TabletSample $taskTabletAfter -PhoneSample $taskPhoneAfter
+        $taskClockReceipt.tablet_verification_sample = $taskTabletAfter
+        $taskClockReceipt.phone_verification_sample = $taskPhoneAfter
+        $taskClockReceipt.verification = $taskDifference
+        if (-not $taskDifference.WithinBounds) {
+            throw "Phone/tablet virtual-clock difference was outside the verified 0..2000 ms interval after query-latency adjustment (estimate $($taskDifference.PhoneAheadEstimateMs) ms, uncertainty $($taskDifference.SamplingUncertaintyMs) ms)."
+        }
+        $taskClockReceipt.status = 'verified'
+        Write-Host "Virtual clock calibration verified: phone ahead estimate $($taskDifference.PhoneAheadEstimateMs) ms (+/- $($taskDifference.SamplingUncertaintyMs) ms)."
+    } catch {
+        $taskClockReceipt.status = 'failed'
+        $taskClockReceipt.error = $_.Exception.Message
+        Write-Warning 'AVD clock calibration failed; freshness checks were not relaxed. Inspect the receipt or explicitly use -SkipClockSync after manual verification.'
+        throw
+    } finally {
+        $taskClockReceipt.completed_utc = [DateTimeOffset]::UtcNow.ToString('o')
+        $taskClockReceipt | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $taskClockReceiptPath -Encoding UTF8
+        Write-Host "Virtual-clock receipt: $taskClockReceiptPath"
+    }
+}
+
 function Wait-QwenModel {
     param($LauncherProcess)
     $watch = [System.Diagnostics.Stopwatch]::StartNew()
@@ -524,6 +660,7 @@ try {
     Start-OrReuseQwen
     foreach ($definition in $devices) { Start-OrReuseEmulator $definition }
     foreach ($definition in $devices) { Wait-DemoBoot $definition }
+    Sync-HybridVirtualClock
 
     $installTargets = @(
         [pscustomobject]@{ Serial = $taskTabletSerial; Apk = $ApkPath; Label = '平板乘客詳細端' },
