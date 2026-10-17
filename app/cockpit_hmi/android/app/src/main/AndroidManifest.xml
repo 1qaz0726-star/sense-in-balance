@@ -2,6 +2,10 @@
     <!-- 線上圖磚、模型首次下載用。圖磚看過一次會快取，之後離線可顯示 -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <!-- 駕駛監測（DMS）：前鏡頭影像只在記憶體處理，不存檔、不上傳 -->
+    <uses-permission android:name="android.permission.CAMERA"/>
+    <uses-feature android:name="android.hardware.camera" android:required="false"/>
+    <uses-feature android:name="android.hardware.camera.front" android:required="false"/>
     <application
         android:label="${appLabel}"
         android:name="${applicationName}"

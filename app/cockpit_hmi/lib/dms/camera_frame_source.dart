@@ -15,7 +15,8 @@ class CameraFrameSource extends DemoFrameSource {
   CameraFrameSource(this.cameras) {
     _backCameraIndex = _preferredCameraIndex(CameraLensDirection.back);
     _frontCameraIndex = _preferredCameraIndex(CameraLensDirection.front);
-    _currentCameraIndex = _backCameraIndex ?? _frontCameraIndex ?? 0;
+    // DMS 看的是駕駛，預設前鏡頭；沒有前鏡頭才退回後鏡頭。
+    _currentCameraIndex = _frontCameraIndex ?? _backCameraIndex ?? 0;
   }
 
   static const Map<DeviceOrientation, int> _deviceOrientationDegrees = {

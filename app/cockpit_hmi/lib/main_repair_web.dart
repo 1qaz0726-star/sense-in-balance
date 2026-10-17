@@ -9,6 +9,10 @@ import 'cockpit_alert_slot.dart';
 import 'cabin_coordination_widgets.dart';
 import 'cockpit_design.dart';
 import 'cockpit_instruments.dart';
+// 網頁版沒有 dart:ffi：有 dart:io 才匯入真的駕駛監測，否則用 DMS 一律關閉的 stub。
+import 'dms/dms_monitor_stub.dart'
+    if (dart.library.io) 'dms/driver_monitor.dart';
+import 'dms/driver_monitor_chip.dart';
 import 'protocol.dart';
 import 'repair_collaboration_widgets.dart';
 import 'repair_speech.dart';
@@ -44,7 +48,11 @@ class RepairMonitor extends StatefulWidget {
 class _RepairMonitorState extends State<RepairMonitor> {
   WebSocketChannel? channel;
   StreamSubscription? subscription;
-  Timer? retry, watch, replyWatch;
+  Timer? retry, watch, replyWatch, dmsTimer;
+  // 駕駛監測：只有原生 Android 且本機是已配對駕駛才開鏡頭；網頁版永遠關閉。
+  final DriverMonitor dms = DriverMonitor();
+  int dmsSeq = 0;
+  DateTime? dmsNotDriverSince;
   Map<String, dynamic>? status;
   DateTime? lastAt;
   bool online = false;
@@ -135,7 +143,57 @@ class _RepairMonitorState extends State<RepairMonitor> {
         }
       }
     });
+    if (DriverMonitor.supported) {
+      dmsTimer = Timer.periodic(
+        const Duration(milliseconds: 250),
+        (_) => _dmsTick(),
+      );
+    }
     unawaited(connect());
+  }
+
+  // 每 250 ms：同步鏡頭開關，並送一筆監測讀數。不佔用 pendingCommandId，
+  // 不等回覆，送法比照 heartbeat。
+  void _dmsTick() {
+    if (!mounted) return;
+    final now = DateTime.now();
+    if (isDriver && validCabinContext) {
+      dmsNotDriverSince = null;
+      if (dms.status == DmsStatus.unsupported || dms.status == DmsStatus.off) {
+        unawaited(dms.start());
+      }
+    } else {
+      // 連線短暫抖動不要馬上關鏡頭。
+      dmsNotDriverSince ??= now;
+      if (now.difference(dmsNotDriverSince!) >= const Duration(seconds: 5) &&
+          dms.status != DmsStatus.off &&
+          dms.status != DmsStatus.unsupported) {
+        unawaited(dms.stop());
+      }
+    }
+    if (dms.active) sendDriverMonitor();
+  }
+
+  void sendDriverMonitor() {
+    if (!frameFresh ||
+        !isDriver ||
+        status?['schema'] != 2 ||
+        !validCabinContext ||
+        channel == null) {
+      return;
+    }
+    final payload = dmsCommandJson(
+      commandId:
+          'dms_${DateTime.now().microsecondsSinceEpoch}_${++commandNumber}',
+      cabinSessionId: cabinContext!['cabin_session_id'] as Object,
+      state: dms,
+      seq: ++dmsSeq,
+    );
+    try {
+      channel!.sink.add(jsonEncode(payload));
+    } catch (_) {
+      lost();
+    }
   }
 
   Future<void> connect() async {
@@ -314,6 +372,8 @@ class _RepairMonitorState extends State<RepairMonitor> {
     retry?.cancel();
     watch?.cancel();
     replyWatch?.cancel();
+    dmsTimer?.cancel();
+    dms.dispose();
     unawaited(subscription?.cancel());
     _closeQuietly(channel);
     summaryScroll.dispose();
@@ -585,6 +645,10 @@ class _RepairMonitorState extends State<RepairMonitor> {
                       fresh: cockpitFresh,
                       gear: _readGear(cockpitEvent, cockpitFresh),
                     ),
+                  if (DriverMonitor.supported && isDriver) ...[
+                    const SizedBox(height: 6),
+                    DriverMonitorChip(state: dms),
+                  ],
                   SizedBox(height: shortLandscape ? 10 : 14),
                   // Alert content changes inside a reserved slot. Normal,
                   // urgent and unknown states keep the same body constraints,
