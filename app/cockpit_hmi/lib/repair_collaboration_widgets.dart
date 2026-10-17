@@ -20,6 +20,29 @@ String requestedChangeLabel(String change) => switch (change) {
   _ => '本次不調整',
 };
 
+/// 駕駛確認頁的一句話摘要：行車中只讀這一句，明細要按「看明細」才展開。
+String driverOneLineSummary(Map pending, Map unsupported) {
+  const short = {'rearFan': '後座風', 'mediaVolume': '音樂', 'navVolume': '導航'};
+  final parts = <String>[];
+  for (final setting in CabinSetting.values) {
+    final name = setting.name;
+    if (!pending.containsKey(name)) continue;
+    final change = '${pending[name]}';
+    parts.add(
+      unsupported.containsKey(name)
+          ? '${short[name]}此車不支援'
+          : '${short[name]}${switch (change) {
+              'decrease' => '小一格',
+              'increase' => '大一格',
+              'keep' => '不變',
+              'remove' => '取消',
+              _ => '待確認',
+            }}',
+    );
+  }
+  return parts.isEmpty ? '沒有待確認的調整' : parts.join('，');
+}
+
 /// Completed UI and speech both require the same actual simulated receipt.
 Map? completedSimulatedCabinState(Map task, {Map? cabinContext}) {
   final result = task['result'];
@@ -261,6 +284,8 @@ class DriverCollaborationPanel extends StatefulWidget {
 class _DriverCollaborationPanelState extends State<DriverCollaborationPanel> {
   final pairing = TextEditingController();
   final pairingFocus = FocusNode();
+  bool showDetails = false;
+  bool showMore = false;
 
   @override
   void didUpdateWidget(covariant DriverCollaborationPanel oldWidget) {
@@ -442,6 +467,15 @@ class _DriverCollaborationPanelState extends State<DriverCollaborationPanel> {
         ],
         if (widget.fresh && !blocked && (active || phase == 'parsing')) ...[
           const SizedBox(height: 18),
+          if (pending.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Text(
+                driverOneLineSummary(pending, unsupported),
+                key: const ValueKey('driver_one_line'),
+                style: cockpitText(22, height: 1.4),
+              ),
+            ),
           if (widget.changedSettings.isNotEmpty &&
               revision is int &&
               revision > 1)
@@ -452,38 +486,47 @@ class _DriverCollaborationPanelState extends State<DriverCollaborationPanel> {
                 style: cockpitText(13, color: CockpitStyle.accent),
               ),
             ),
-          for (final setting in CabinSetting.values)
-            Container(
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              decoration: const BoxDecoration(
-                border: Border(
-                  bottom: BorderSide(color: CockpitStyle.line, width: .5),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              key: const ValueKey('driver_details_toggle'),
+              onPressed: () => setState(() => showDetails = !showDetails),
+              child: Text(showDetails ? '收起明細' : '看明細'),
+            ),
+          ),
+          if (showDetails)
+            for (final setting in CabinSetting.values)
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                decoration: const BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(color: CockpitStyle.line, width: .5),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        cabinSettingLabel(setting.name),
+                        style: cockpitText(14),
+                      ),
+                    ),
+                    Text(
+                      unsupported.containsKey(setting.name)
+                          ? '此車受限 · 未送出'
+                          : requestedChangeLabel(
+                              '${pending[setting.name] ?? ''}',
+                            ),
+                      style: cockpitText(
+                        14,
+                        color: widget.changedSettings.contains(setting.name)
+                            ? CockpitStyle.accent
+                            : CockpitStyle.muted,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      cabinSettingLabel(setting.name),
-                      style: cockpitText(14),
-                    ),
-                  ),
-                  Text(
-                    unsupported.containsKey(setting.name)
-                        ? '此車受限 · 未送出'
-                        : requestedChangeLabel(
-                            '${pending[setting.name] ?? ''}',
-                          ),
-                    style: cockpitText(
-                      14,
-                      color: widget.changedSettings.contains(setting.name)
-                          ? CockpitStyle.accent
-                          : CockpitStyle.muted,
-                    ),
-                  ),
-                ],
-              ),
-            ),
         ],
         if (widget.fresh && !blocked && task['clarification'] is String) ...[
           const SizedBox(height: 12),
@@ -577,16 +620,46 @@ class _DriverCollaborationPanelState extends State<DriverCollaborationPanel> {
             ),
           ),
         ] else if (hasCurrentTask && (active || phase == 'parsing')) ...[
+          // 主操作只有一個：整排寬的確認鍵。授權留在下一排；收回授權、取消收進「更多」。
+          if (active && !blocked)
+            SizedBox(
+              width: double.infinity,
+              height: 56,
+              child: FilledButton(
+                key: const ValueKey('driver_confirm'),
+                onPressed:
+                    enabled &&
+                        hasCurrentTask &&
+                        phase == 'awaitingConfirmation' &&
+                        contextReady &&
+                        unsupported.isEmpty
+                    ? () =>
+                          widget.onAction(resume ? 'resume_confirm' : 'confirm')
+                    : null,
+                child: Text(
+                  widget.cabinContext == null
+                      ? '確認套用（車控模擬）'
+                      : unsupported.isNotEmpty
+                      ? '先處理受限項目'
+                      : resume
+                      ? '繼續並確認最新 ${pending.length} 項'
+                      : '確認這次調整',
+                  style: const TextStyle(fontSize: 18),
+                ),
+              ),
+            ),
+          const SizedBox(height: 10),
           Text(
             authorized && remaining > 0
-                ? '乘客已獲本次授權 · 剩餘 $remaining 秒'
-                : '乘客尚未獲授權；候選摘要不會自行執行。',
+                ? '乘客可修改 · 剩 $remaining 秒'
+                : '按確認前不會執行。',
             style: cockpitText(12, color: CockpitStyle.muted),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 6),
           Wrap(
             spacing: 12,
             runSpacing: 10,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               if (active && !blocked)
                 OutlinedButton(
@@ -599,9 +672,14 @@ class _DriverCollaborationPanelState extends State<DriverCollaborationPanel> {
                               widget.cabinContext?['can_grant'] == true)
                       ? () => widget.onAction('grant')
                       : null,
-                  child: const Text('授權乘客協助 120 秒'),
+                  child: const Text('讓乘客修改（120 秒）'),
                 ),
-              if (authorized)
+              TextButton(
+                key: const ValueKey('driver_more'),
+                onPressed: () => setState(() => showMore = !showMore),
+                child: Text(showMore ? '收起' : '更多'),
+              ),
+              if (showMore && authorized)
                 TextButton(
                   key: const ValueKey('driver_revoke'),
                   onPressed: enabled && hasCurrentTask
@@ -609,37 +687,17 @@ class _DriverCollaborationPanelState extends State<DriverCollaborationPanel> {
                       : null,
                   child: const Text('收回授權'),
                 ),
-              if (active && !blocked)
-                FilledButton(
-                  key: const ValueKey('driver_confirm'),
+              if (showMore)
+                TextButton(
+                  key: const ValueKey('driver_cancel'),
                   onPressed:
                       enabled &&
                           hasCurrentTask &&
-                          phase == 'awaitingConfirmation' &&
-                          contextReady &&
-                          unsupported.isEmpty
-                      ? () => widget.onAction(
-                          resume ? 'resume_confirm' : 'confirm',
-                        )
+                          (active || phase == 'parsing')
+                      ? () => widget.onAction('cancel')
                       : null,
-                  child: Text(
-                    widget.cabinContext == null
-                        ? '確認套用（車控模擬）'
-                        : unsupported.isNotEmpty
-                        ? '先處理受限項目'
-                        : resume
-                        ? '繼續並確認最新 ${pending.length} 項'
-                        : '確認這次調整',
-                  ),
+                  child: const Text('取消這次需求'),
                 ),
-              TextButton(
-                key: const ValueKey('driver_cancel'),
-                onPressed:
-                    enabled && hasCurrentTask && (active || phase == 'parsing')
-                    ? () => widget.onAction('cancel')
-                    : null,
-                child: const Text('取消這次需求'),
-              ),
             ],
           ),
         ] else ...[

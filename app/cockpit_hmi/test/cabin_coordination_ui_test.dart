@@ -310,6 +310,23 @@ void main() {
     },
   );
 
+  testWidgets('駕駛確認頁：一句話＋確認鍵，取消收在「更多」', (tester) async {
+    final actions = <String>[];
+    await _panel(tester, _context(), onAction: actions.add);
+    expect(
+      tester.widget<Text>(find.byKey(const ValueKey('driver_one_line'))).data,
+      '音樂小一格，導航不變',
+    );
+    expect(find.byKey(const ValueKey('driver_confirm')), findsOneWidget);
+    expect(find.byKey(const ValueKey('driver_cancel')), findsNothing);
+    expect(find.text('降低一格'), findsNothing, reason: '明細預設收起');
+    await tester.ensureVisible(find.byKey(const ValueKey('driver_more')));
+    await tester.tap(find.byKey(const ValueKey('driver_more')));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('driver_cancel')), findsOneWidget);
+    expect(actions, isEmpty);
+  });
+
   testWidgets('resume is one explicit action using latest candidate', (
     tester,
   ) async {
@@ -338,6 +355,17 @@ void main() {
       find.byKey(const ValueKey('driver_confirm')),
     );
     expect(button.onPressed, isNull);
+    // 一句話摘要直接講受限；明細收起，按「看明細」才出現逐項說明。
+    expect(
+      tester.widget<Text>(find.byKey(const ValueKey('driver_one_line'))).data,
+      contains('後座風此車不支援'),
+    );
+    expect(find.text('此車受限 · 未送出'), findsNothing);
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('driver_details_toggle')),
+    );
+    await tester.tap(find.byKey(const ValueKey('driver_details_toggle')));
+    await tester.pump();
     expect(find.text('此車受限 · 未送出'), findsOneWidget);
     expect(find.text('先處理受限項目'), findsOneWidget);
   });
