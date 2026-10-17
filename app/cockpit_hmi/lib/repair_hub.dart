@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 
 import 'repair_task.dart';
 import 'repair_collaboration.dart';
+import 'cabin_driver_monitor_source.dart';
 import 'cabin_policy.dart';
 
 /// Read-only by default. With an explicit collaboration layer, one paired
@@ -35,6 +36,7 @@ class RepairHub {
   int _generation = 0;
   final _clients = <WebSocket>{};
   final _peers = <WebSocket, _RepairPeer>{};
+  CabinDriverMonitorSource? _driverMonitor;
   void Function(Object)? _previousExpiryHandler;
   void Function(Object)? _expiryHandler;
   List<String> addresses = [];
@@ -245,6 +247,25 @@ class RepairHub {
       }
       final action = decoded['action'];
       final policy = c.policy;
+      if (action == 'driver_monitor') {
+        // 駕駛端鏡頭每 250 ms 一筆：只收已配對駕駛、同一工作階段；不回覆也不進指令快取。
+        // 不合格就靜默丟棄，監測訊號過期時注意力規則本來就不會鎖住系統。
+        final sessionId = decoded['cabin_session_id'];
+        if (policy != null &&
+            id != null &&
+            decoded['type'] == 'repair_command' &&
+            decoded.length == 5 &&
+            decoded.containsKey('monitor') &&
+            sessionId is String &&
+            policy.matchesSession(sessionId) &&
+            c.isDriver(socket)) {
+          if (_driverMonitor?.policy != policy) {
+            _driverMonitor = CabinDriverMonitorSource(policy);
+          }
+          _driverMonitor!.sample(decoded['monitor']);
+        }
+        return;
+      }
       final taskAction = const {
         'grant',
         'revoke',

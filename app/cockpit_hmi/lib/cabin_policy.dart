@@ -107,6 +107,7 @@ class CabinAttentionFrame {
     this.active = false,
     this.known = true,
     this.simulated = true,
+    this.reason,
   });
 
   final String sourceId;
@@ -118,6 +119,9 @@ class CabinAttentionFrame {
   final bool active;
   final bool known;
   final bool simulated;
+
+  /// 只有駕駛監測使用：'distracted'（視線偏離）或 'drowsy'（閉眼／疲勞）。
+  final String? reason;
 }
 
 class _AttentionSource {
@@ -129,6 +133,7 @@ class _AttentionSource {
   bool known = false;
   bool active = false;
   CabinDrivingMode mode = CabinDrivingMode.unknown;
+  String? reason;
   final Set<String> retiredEpisodes = {};
 }
 
@@ -156,6 +161,12 @@ class CabinPolicy extends ChangeNotifier {
   static const drivingSource = 'driving-context';
   static const safetySource = 'cockpit-safety';
   static const _requiredSources = {drivingSource, safetySource};
+
+  /// 駕駛監測（前鏡頭＋臉部特徵點）是唯一的真實感知來源，屬於選配：
+  /// 沒有註冊、過期或偵測不到臉時不鎖住系統（失效時照原本流程，畫面另外標示），
+  /// 只有新鮮且確定「偏離／閉眼」時才暫停非緊急確認。
+  static const driverMonitorSource = 'driver-monitor';
+  static const _optionalSources = {driverMonitorSource};
   static int _sessionNumber = 0;
   static String _newSession() =>
       'cabin_${DateTime.now().microsecondsSinceEpoch}_${++_sessionNumber}';
@@ -229,7 +240,8 @@ class CabinPolicy extends ChangeNotifier {
   /// Reusing a retired source session is refused, even with a new sequence.
   bool registerSource(String sourceId, String sourceSession) {
     if (_disposed ||
-        !_requiredSources.contains(sourceId) ||
+        !(_requiredSources.contains(sourceId) ||
+            _optionalSources.contains(sourceId)) ||
         sourceSession.isEmpty ||
         sourceSession.length > 120 ||
         (_retiredSourceSessions[sourceId]?.contains(sourceSession) ?? false)) {
@@ -258,7 +270,11 @@ class CabinPolicy extends ChangeNotifier {
         frame.sequence < 1 ||
         frame.episodeId.isEmpty ||
         frame.episodeId.length > 120 ||
-        !frame.simulated ||
+        // 車輛訊號仍是模擬；只有駕駛監測可以是真實鏡頭訊號。
+        (!frame.simulated && frame.sourceId != driverMonitorSource) ||
+        (frame.sourceId == driverMonitorSource &&
+            frame.active &&
+            !const {'distracted', 'drowsy'}.contains(frame.reason)) ||
         frame.sampledAt < Duration.zero ||
         frame.sampledAt > now ||
         now - frame.sampledAt >= sourceTtl ||
@@ -300,6 +316,7 @@ class CabinPolicy extends ChangeNotifier {
       source.active = frame.active;
       source.episodeId = frame.episodeId;
       source.mode = frame.mode;
+      source.reason = frame.active ? frame.reason : null;
     }
     _recompute();
     return true;
@@ -355,6 +372,12 @@ class CabinPolicy extends ChangeNotifier {
         }
       }
     }
+    final monitor = _sources[driverMonitorSource];
+    if (_driverMonitorFresh(monitor, now) && monitor!.known && monitor.active) {
+      next.add(
+        monitor.reason == 'drowsy' ? 'driver_drowsy' : 'driver_distracted',
+      );
+    }
     next.sort();
     final driving = _sources[drivingSource];
     _mode =
@@ -388,6 +411,31 @@ class CabinPolicy extends ChangeNotifier {
     _fingerprint = fingerprint;
     _taskFingerprint = taskFingerprint;
     if (notify && (attentionChanged || taskChanged)) notifyListeners();
+  }
+
+  bool _driverMonitorFresh(_AttentionSource? source, Duration now) {
+    final sampled = source?.sampledAt;
+    if (source == null || sampled == null || _clockInvalid) return false;
+    final age = now - sampled;
+    return age >= Duration.zero && age < sourceTtl;
+  }
+
+  /// 畫面用：off（沒有駕駛端鏡頭）／stale（訊號中斷）／no_face（看不到臉）／live。
+  Map<String, dynamic> get driverMonitorStatus {
+    final source = _sources[driverMonitorSource];
+    final fresh = _driverMonitorFresh(source, _lastClock);
+    return {
+      'state': source == null || source.sampledAt == null
+          ? 'off'
+          : !fresh
+          ? 'stale'
+          : !source.known
+          ? 'no_face'
+          : 'live',
+      'active': fresh && (source?.known ?? false) && (source?.active ?? false),
+      'reason': fresh && (source?.active ?? false) ? source?.reason : null,
+      'simulated': false,
+    };
   }
 
   bool matchesSession(String? session) =>
@@ -458,7 +506,9 @@ class CabinPolicy extends ChangeNotifier {
             : _phase.name,
         'mode': _mode.name,
         'blockers': List<String>.of(_blockers),
+        // 車輛模式與警示仍是模擬；駕駛監測另列在 driver_monitor，是真實鏡頭訊號。
         'simulated': true,
+        'driver_monitor': driverMonitorStatus,
         'source_ttl_ms': sourceTtl.inMilliseconds,
         'sources': {
           for (final id in _requiredSources)

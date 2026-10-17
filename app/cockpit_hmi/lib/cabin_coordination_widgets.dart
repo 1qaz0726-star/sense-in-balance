@@ -36,10 +36,33 @@ Map cabinUnsupported(Map? context) {
       : const {};
 }
 
+/// 駕駛監測燈號文字；null 代表這個場景沒有駕駛端鏡頭（不顯示）。
+String? cabinDriverMonitorLabel(Map? context) {
+  final attention = context?['attention'];
+  final monitor = attention is Map ? attention['driver_monitor'] : null;
+  if (monitor is! Map) return null;
+  return switch (monitor['state']) {
+    'live' => switch (monitor['reason']) {
+      'drowsy' => '駕駛監測：閉眼',
+      'distracted' => '駕駛監測：視線偏離',
+      _ => '駕駛監測：看路中',
+    },
+    'no_face' => '駕駛監測：偵測不到臉',
+    'stale' => '駕駛監測：訊號中斷',
+    _ => null,
+  };
+}
+
 String cabinAttentionHeadline(Map? context) {
   final attention = context?['attention'];
   final mode = attention is Map ? attention['mode'] : null;
   if (mode == 'handoverRequested') return '接管提醒（模擬）';
+  final blockers = attention is Map && attention['blockers'] is List
+      ? attention['blockers'] as List
+      : const [];
+  // 駕駛監測是真實鏡頭訊號，不加「模擬」字樣。
+  if (blockers.contains('driver_drowsy')) return '偵測到閉眼，請先休息';
+  if (blockers.contains('driver_distracted')) return '視線離開道路，請先看路';
   if (mode == 'unknown' || cabinAttentionPhase(context) == 'unknown') {
     return '駕駛模式訊號未確認';
   }
@@ -101,6 +124,15 @@ class CabinAttentionStrip extends StatelessWidget {
                 ),
               ),
             ),
+            if (cabinDriverMonitorLabel(contextData) case final monitor?)
+              Padding(
+                padding: const EdgeInsets.only(left: 8),
+                child: Text(
+                  monitor,
+                  key: const ValueKey('cabin_driver_monitor'),
+                  style: cockpitText(11, color: CockpitStyle.muted),
+                ),
+              ),
             if (resume && !blocked && onViewSummary != null)
               TextButton(
                 key: const ValueKey('cabin_view_latest'),
