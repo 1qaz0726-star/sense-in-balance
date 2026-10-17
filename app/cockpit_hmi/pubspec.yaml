@@ -43,6 +43,9 @@ dependencies:
   crypto: ^3.0.6
   flutter_tts: ^4.2.5
   web_socket_channel: ^3.0.3
+  # 駕駛監測（DMS）：前鏡頭＋臉部特徵點，只在駕駛屏手機上啟用；版本同 F:/mpfm_probe 9/23 實機驗證過的組合
+  camera: 0.12.0+1
+  mediapipe_face_mesh: 3.0.0
 
 dev_dependencies:
   flutter_test:
