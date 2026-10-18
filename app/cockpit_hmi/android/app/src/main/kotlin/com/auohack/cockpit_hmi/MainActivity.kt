@@ -31,8 +31,32 @@ class MainActivity : FlutterActivity() {
     private var recordFile: File? = null
     private var recordReply: MethodChannel.Result? = null
 
+    // 方向盤按鍵：音量上鍵（藍牙自拍遙控器也送這個鍵）。只有駕駛端 App 開啟時才攔截，
+    // 其他時候音量鍵照常調音量。
+    private var steeringChannel: MethodChannel? = null
+    private var steeringEnabled = false
+
+    override fun onKeyDown(keyCode: Int, event: android.view.KeyEvent?): Boolean {
+        if (steeringEnabled && keyCode == android.view.KeyEvent.KEYCODE_VOLUME_UP) {
+            if (event?.repeatCount == 0) steeringChannel?.invokeMethod("pressed", null)
+            return true
+        }
+        return super.onKeyDown(keyCode, event)
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        steeringChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "sense_in_balance/steering_button").also {
+            it.setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "enable" -> {
+                        steeringEnabled = call.arguments as? Boolean ?: false
+                        result.success(null)
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+        }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "sense_in_balance/repair_speech")
             .setMethodCallHandler { call, result ->
                 when (call.method) {

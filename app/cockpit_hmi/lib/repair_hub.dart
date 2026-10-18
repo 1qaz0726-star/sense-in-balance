@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'repair_task.dart';
 import 'repair_collaboration.dart';
 import 'cabin_driver_monitor_source.dart';
+import 'repair_collaboration_widgets.dart' show driverOneLineSummary;
 import 'cabin_policy.dart';
 
 /// Read-only by default. With an explicit collaboration layer, one paired
@@ -247,6 +248,52 @@ class RepairHub {
       }
       final action = decoded['action'];
       final policy = c.policy;
+      if (action == 'driver_request') {
+        // 駕駛自己說的需求：解析、能直接確認就直接執行（走同一個 confirm）。
+        // 非同步完成後才回覆，回覆附上結果與一句話摘要給駕駛端念出。
+        final text = decoded['text'];
+        final sessionId = decoded['cabin_session_id'];
+        if (id == null ||
+            decoded['type'] != 'repair_command' ||
+            decoded.length != (policy == null ? 4 : 5) ||
+            text is! String ||
+            (policy != null && sessionId is! String)) {
+          throw const FormatException('不支援的指令或欄位。');
+        }
+        final commandId = id;
+        unawaited(
+          c
+              .driverRequest(
+                socket,
+                text,
+                sessionId: sessionId is String ? sessionId : null,
+              )
+              .then((outcome) {
+                final task = controller.snapshot;
+                send({
+                  ...reply(outcome != 'rejected', c.error),
+                  'command_id': commandId,
+                  'outcome': outcome,
+                  'summary': driverOneLineSummary(
+                    {
+                      for (final e in task.pending.entries)
+                        e.key.name: e.value.name,
+                    },
+                    policy == null
+                        ? const {}
+                        : {
+                            for (final e in policy.unsupported.entries)
+                              e.key.name: e.value,
+                          },
+                  ),
+                  if (task.clarification != null)
+                    'clarification': task.clarification,
+                });
+                _broadcast();
+              }),
+        );
+        return;
+      }
       if (action == 'driver_monitor') {
         // 駕駛端鏡頭每 250 ms 一筆：只收已配對駕駛、同一工作階段；不回覆也不進指令快取。
         // 不合格就靜默丟棄，監測訊號過期時注意力規則本來就不會鎖住系統。

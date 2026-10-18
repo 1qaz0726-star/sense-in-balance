@@ -72,6 +72,10 @@ class _RepairMonitorState extends State<RepairMonitor> {
   final speechIn = RepairSpeechInput();
   String? voicePrompted;
   bool voiceListening = false;
+  // 駕駛自己說的需求（方向盤按鍵或「說需求」）：等主控回覆結果再念出來。
+  final steering = SteeringButton();
+  String? driverRequestId;
+  Timer? driverRequestWatch;
   final summaryScroll = ScrollController();
   bool speechBusy = false;
   int speechGeneration = 0;
@@ -150,6 +154,7 @@ class _RepairMonitorState extends State<RepairMonitor> {
       }
     });
     if (DriverMonitor.supported) {
+      steering.attach(_onSteeringButton);
       dmsTimer = Timer.periodic(
         const Duration(milliseconds: 250),
         (_) => _dmsTick(),
@@ -253,7 +258,114 @@ class _RepairMonitorState extends State<RepairMonitor> {
       unawaited(_voiceConfirm());
       return;
     }
+    if (action == 'speak_request') {
+      unawaited(_driverSpeak());
+      return;
+    }
     sendCommand(action);
+  }
+
+  /// 方向盤按鍵：有待確認的需求就用說的確認；沒有就讓駕駛說新需求。
+  void _onSteeringButton() {
+    if (!mounted || voiceListening || driverRequestId != null) return;
+    if (_voiceTarget() != null) {
+      unawaited(_voiceConfirm());
+    } else {
+      unawaited(_driverSpeak());
+    }
+  }
+
+  bool get canDriverSpeak {
+    final phase = (status?['task'] is Map
+        ? status!['task'] as Map
+        : const {})['phase'];
+    return DriverMonitor.supported &&
+        isDriver &&
+        validCabinContext &&
+        driverRequestId == null &&
+        !voiceListening &&
+        const {null, 'idle', 'completed', 'cancelled'}.contains(phase);
+  }
+
+  /// 駕駛說需求 → 主控解析；能直接確認就直接執行，否則停在確認或澄清。
+  Future<void> _driverSpeak() async {
+    if (!canDriverSpeak || channel == null) return;
+    setState(() {
+      voiceListening = true;
+      commandError = null;
+      commandNotice = '請說需求。';
+    });
+    String? text;
+    try {
+      await feedback.speak('請說', waitDone: true);
+      text = await speechIn.listen();
+    } catch (_) {
+      text = null;
+    }
+    if (!mounted) return;
+    if (text == null || text.isEmpty || !canDriverSpeakAfterListen) {
+      setState(() {
+        voiceListening = false;
+        commandNotice = '沒有聽到需求；可以再按一次方向盤按鍵。';
+      });
+      return;
+    }
+    final id =
+        'drv_${DateTime.now().microsecondsSinceEpoch}_${++commandNumber}';
+    final payload = <String, dynamic>{
+      'type': 'repair_command',
+      'command_id': id,
+      'action': 'driver_request',
+      if (status?['schema'] == 2)
+        'cabin_session_id': cabinContext!['cabin_session_id'],
+      'text': text,
+    };
+    setState(() {
+      voiceListening = false;
+      driverRequestId = id;
+      commandNotice = '「$text」處理中…';
+    });
+    try {
+      channel!.sink.add(jsonEncode(payload));
+      driverRequestWatch?.cancel();
+      // 解析在主控端可能要數秒（手機端上模型），給足時間。
+      driverRequestWatch = Timer(const Duration(seconds: 40), () {
+        if (!mounted || driverRequestId != id) return;
+        setState(() {
+          driverRequestId = null;
+          commandNotice = '主控沒有回覆；請以最新摘要為準。';
+        });
+      });
+    } catch (_) {
+      lost();
+    }
+  }
+
+  bool get canDriverSpeakAfterListen =>
+      isDriver && validCabinContext && channel != null;
+
+  void _onDriverRequestReply(Map m) {
+    driverRequestWatch?.cancel();
+    final outcome = m['outcome'];
+    final summary = '${m['summary'] ?? ''}';
+    final spoken = switch (outcome) {
+      'executed' => '好，$summary。',
+      'clarify' => '${m['clarification'] ?? '請再說清楚一點。'}',
+      'confirm' => null, // 不能直接執行：交給「用說的確認」流程
+      _ => '${m['error'] ?? '這次沒有成功，請再說一次。'}',
+    };
+    setState(() {
+      driverRequestId = null;
+      commandNotice = switch (outcome) {
+        'executed' => '已直接執行：$summary（駕駛口令）',
+        'clarify' => '需要說清楚：${m['clarification'] ?? ''}',
+        'confirm' => '需求已保留，請確認。',
+        _ => '${m['error'] ?? '沒有成功。'}',
+      };
+    });
+    if (spoken != null && spoken.trim().isNotEmpty) {
+      unawaited(feedback.speak(spoken));
+    }
   }
 
   void sendDriverMonitor() {
@@ -306,6 +418,11 @@ class _RepairMonitorState extends State<RepairMonitor> {
             if (attempt == generation &&
                 m is Map &&
                 m['type'] == 'repair_reply') {
+              if (driverRequestId != null &&
+                  m['command_id'] == driverRequestId) {
+                _onDriverRequestReply(m);
+                return;
+              }
               if (m['accepted'] is! bool ||
                   m['command_id'] != pendingCommandId) {
                 return;
@@ -457,6 +574,8 @@ class _RepairMonitorState extends State<RepairMonitor> {
     dmsTimer?.cancel();
     dms.dispose();
     speechIn.dispose();
+    steering.detach();
+    driverRequestWatch?.cancel();
     unawaited(subscription?.cancel());
     _closeQuietly(channel);
     summaryScroll.dispose();

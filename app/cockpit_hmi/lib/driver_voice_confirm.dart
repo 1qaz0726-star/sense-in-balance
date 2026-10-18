@@ -2,7 +2,27 @@
 // 只是把「按確認鍵」換成「說好」：送出的仍是同一個 confirm／resume_confirm 指令，
 // 主控端照常檢查身分、版本、注意力與能力；駕駛說「不要」只是不套用，需求保留。
 
+import 'package:flutter/services.dart';
+
 enum VoiceReply { yes, no }
+
+/// 方向盤按鍵：Android 音量上鍵（藍牙自拍遙控器也送這個鍵）。只在駕駛端原生 App
+/// 掛上時攔截；離開時放開，音量鍵恢復調音量。
+class SteeringButton {
+  static const _channel = MethodChannel('sense_in_balance/steering_button');
+
+  void attach(void Function() onPressed) {
+    _channel.setMethodCallHandler((call) async {
+      if (call.method == 'pressed') onPressed();
+    });
+    _channel.invokeMethod<void>('enable', true).catchError((Object _) {});
+  }
+
+  void detach() {
+    _channel.setMethodCallHandler(null);
+    _channel.invokeMethod<void>('enable', false).catchError((Object _) {});
+  }
+}
 
 const _no = [
   '不要',

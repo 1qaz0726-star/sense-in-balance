@@ -105,7 +105,74 @@ class RepairCollaboration extends ChangeNotifier {
     if (_completedDemoFault != null &&
         _completedDemoFault!['task_id'] == controller.snapshot.taskId)
       'demo_fault_source': Map<String, dynamic>.of(_completedDemoFault!),
+    if (_driverOriginTaskId != null &&
+        _driverOriginTaskId == controller.snapshot.taskId)
+      'driver_origin': true,
   };
+
+  /// 最近一筆由駕駛自己用語音提出的需求（畫面標示「駕駛口令」用）。
+  String? _driverOriginTaskId;
+  bool _driverRequestBusy = false;
+
+  /// 駕駛自己說的需求：已配對駕駛、沒有進行中的需求時才收。解析完成後，
+  /// 若能直接確認，就走和按確認鍵完全相同的 [confirm]（身分、版本、注意力、
+  /// 能力照常檢查）；不能確認時（警示中、受限項目、需要澄清）就停在原流程。
+  /// 回傳 executed／confirm（仍待確認）／clarify（需要說清楚）／rejected。
+  Future<String> driverRequest(
+    Object peer,
+    String text, {
+    String? sessionId,
+  }) async {
+    checkTimeouts();
+    if (policy != null && !policy!.matchesSession(sessionId)) {
+      _reject('座艙場景已更新，請重新配對。');
+      return 'rejected';
+    }
+    if (!isDriver(peer)) {
+      _reject('請先配對駕駛端。');
+      return 'rejected';
+    }
+    final trimmed = text.trim();
+    if (trimmed.isEmpty || trimmed.runes.length > 200) {
+      _reject('沒有聽到需求，請再說一次。');
+      return 'rejected';
+    }
+    if (_driverRequestBusy ||
+        !const {
+          RepairPhase.idle,
+          RepairPhase.completed,
+          RepairPhase.cancelled,
+        }.contains(controller.snapshot.phase)) {
+      _reject('還有一筆需求在處理，請先完成或取消。');
+      return 'rejected';
+    }
+    _driverRequestBusy = true;
+    try {
+      if (!await newTask(trimmed)) {
+        _reject('需求沒有成功解析，請再說一次。');
+        return 'rejected';
+      }
+      final task = controller.snapshot;
+      _driverOriginTaskId = task.taskId;
+      _notify();
+      if (task.phase == RepairPhase.awaitingClarification) return 'clarify';
+      if (task.phase != RepairPhase.awaitingConfirmation ||
+          task.taskId == null) {
+        return 'rejected';
+      }
+      final executed = confirm(
+        peer,
+        task.taskId!,
+        task.revision,
+        context: policy?.identity,
+      );
+      // 不能直接確認不算失敗：需求保留，駕駛端會改用「用說的確認」。
+      if (!executed) error = null;
+      return executed ? 'executed' : 'confirm';
+    } finally {
+      _driverRequestBusy = false;
+    }
+  }
 
   void _notify() {
     if (!_disposed) notifyListeners();

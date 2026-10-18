@@ -729,6 +729,19 @@ class _DriverCollaborationPanelState extends State<DriverCollaborationPanel> {
                 : '等待乘客提出需求。',
             style: cockpitText(12, color: CockpitStyle.muted),
           ),
+          if (widget.voiceAvailable &&
+              driver &&
+              !const {'executing', 'indeterminate'}.contains(phase)) ...[
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              key: const ValueKey('driver_speak_request'),
+              onPressed: enabled
+                  ? () => widget.onAction('speak_request')
+                  : null,
+              icon: const Icon(Icons.mic_none, size: 18),
+              label: const Text('說需求（或按方向盤鍵）'),
+            ),
+          ],
         ],
         if (widget.commandError != null) ...[
           const SizedBox(height: 12),
