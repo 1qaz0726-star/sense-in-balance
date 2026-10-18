@@ -82,6 +82,7 @@ flutter:
     - assets/repair_web/assets/fonts/
     - assets/repair_web/assets/packages/cupertino_icons/assets/
     - assets/repair_web/assets/packages/flutter_map/lib/assets/
+    - assets/repair_web/assets/packages/mediapipe_face_mesh/assets/models/
     - assets/repair_web/assets/shaders/
     - assets/repair_web/canvaskit/
     - assets/repair_web/canvaskit/chromium/
