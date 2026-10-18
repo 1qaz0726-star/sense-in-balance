@@ -264,8 +264,12 @@ class DriverCollaborationPanel extends StatefulWidget {
     this.speechBusy = false,
     this.speechNotice,
     this.cabinContext,
+    this.voiceAvailable = false,
   });
   final Map task;
+
+  /// 駕駛端原生 App：顯示「用說的確認」，按下時呼叫 onAction('voice')。
+  final bool voiceAvailable;
   final Map collaboration;
   final bool fresh, driver, commandPending;
   final ValueChanged<String> onPair, onAction;
@@ -673,6 +677,18 @@ class _DriverCollaborationPanelState extends State<DriverCollaborationPanel> {
                       ? () => widget.onAction('grant')
                       : null,
                   child: const Text('讓乘客修改（120 秒）'),
+                ),
+              if (widget.voiceAvailable &&
+                  active &&
+                  !blocked &&
+                  phase == 'awaitingConfirmation' &&
+                  contextReady &&
+                  unsupported.isEmpty)
+                TextButton.icon(
+                  key: const ValueKey('driver_voice'),
+                  onPressed: enabled ? () => widget.onAction('voice') : null,
+                  icon: const Icon(Icons.mic_none, size: 18),
+                  label: const Text('用說的確認'),
                 ),
               TextButton(
                 key: const ValueKey('driver_more'),

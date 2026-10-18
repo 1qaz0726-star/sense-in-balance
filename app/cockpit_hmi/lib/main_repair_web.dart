@@ -15,6 +15,7 @@ import 'dms/dms_monitor_stub.dart'
 import 'dms/driver_monitor_chip.dart';
 import 'protocol.dart';
 import 'repair_collaboration_widgets.dart';
+import 'driver_voice_confirm.dart';
 import 'repair_speech.dart';
 
 void main() {
@@ -67,6 +68,10 @@ class _RepairMonitorState extends State<RepairMonitor> {
   Map previousPending = const {};
   Set<String> changedSettings = {};
   final feedback = RepairSpeechFeedback();
+  // 駕駛用說的確認（只在原生 Android 駕駛端）：同一版需求只主動問一次。
+  final speechIn = RepairSpeechInput();
+  String? voicePrompted;
+  bool voiceListening = false;
   final summaryScroll = ScrollController();
   bool speechBusy = false;
   int speechGeneration = 0;
@@ -134,6 +139,7 @@ class _RepairMonitorState extends State<RepairMonitor> {
         lost();
       } else {
         setState(trackSafetyTransition);
+        _maybeVoicePrompt();
         if (isDriver &&
             (lastHeartbeatAt == null ||
                 DateTime.now().difference(lastHeartbeatAt!) >=
@@ -172,6 +178,82 @@ class _RepairMonitorState extends State<RepairMonitor> {
       }
     }
     if (dms.active) sendDriverMonitor();
+  }
+
+  /// 目前能不能用說的確認；可以的話回傳（摘要句, 是否續辦, 問過的鍵），否則 null。
+  (String, bool, String)? _voiceTarget() {
+    if (!DriverMonitor.supported || !isDriver || pendingCommandId != null) {
+      return null;
+    }
+    final task = status?['task'];
+    if (task is! Map || task['phase'] != 'awaitingConfirmation') return null;
+    final pending = task['pending'];
+    if (pending is! Map || pending.isEmpty) return null;
+    final context = cabinContext;
+    final resume = cabinRequiresResume(context);
+    final unsupported = cabinUnsupported(context);
+    if (cabinAttentionBlocked(context) ||
+        unsupported.isNotEmpty ||
+        (context != null &&
+            context[resume ? 'can_resume_confirm' : 'can_confirm'] != true)) {
+      return null;
+    }
+    return (
+      driverOneLineSummary(pending, unsupported),
+      resume,
+      voicePromptKey(task, context, resume: resume),
+    );
+  }
+
+  void _maybeVoicePrompt() {
+    if (voiceListening) return;
+    final target = _voiceTarget();
+    if (target == null || target.$3 == voicePrompted) return;
+    voicePrompted = target.$3;
+    unawaited(_voiceConfirm());
+  }
+
+  /// 念摘要 → 聽「好／不要」→ 再確認狀態沒變才送出；送的是和按鍵相同的確認指令。
+  Future<void> _voiceConfirm() async {
+    final target = _voiceTarget();
+    if (target == null || voiceListening) return;
+    final (summary, resume, key) = target;
+    setState(() {
+      voiceListening = true;
+      commandNotice = '請說「好」套用，或說「不要」。';
+    });
+    String notice;
+    try {
+      await feedback.speak('$summary，要套用嗎？', waitDone: true);
+      final reply = parseVoiceReply(await speechIn.listen());
+      final now = _voiceTarget();
+      if (!mounted || now == null || now.$3 != key) {
+        notice = '需求已更新，請看最新摘要。';
+      } else if (reply == VoiceReply.yes) {
+        voiceListening = false;
+        sendCommand(resume ? 'resume_confirm' : 'confirm');
+        return;
+      } else if (reply == VoiceReply.no) {
+        notice = '沒有套用，需求保留。';
+      } else {
+        notice = '沒聽清楚；可以按確認鍵，或按「用說的確認」再說一次。';
+      }
+    } catch (_) {
+      notice = '語音無法使用；請按確認鍵。';
+    }
+    if (!mounted) return;
+    setState(() {
+      voiceListening = false;
+      commandNotice = notice;
+    });
+  }
+
+  void _onDriverAction(String action) {
+    if (action == 'voice') {
+      unawaited(_voiceConfirm());
+      return;
+    }
+    sendCommand(action);
   }
 
   void sendDriverMonitor() {
@@ -374,6 +456,7 @@ class _RepairMonitorState extends State<RepairMonitor> {
     replyWatch?.cancel();
     dmsTimer?.cancel();
     dms.dispose();
+    speechIn.dispose();
     unawaited(subscription?.cancel());
     _closeQuietly(channel);
     summaryScroll.dispose();
@@ -607,7 +690,8 @@ class _RepairMonitorState extends State<RepairMonitor> {
               commandError: commandError,
               commandNotice: commandNotice,
               onPair: (code) => sendCommand('pair_driver', pairingCode: code),
-              onAction: sendCommand,
+              onAction: _onDriverAction,
+              voiceAvailable: DriverMonitor.supported && !voiceListening,
               onSpeak: _completedResultText() == null ? null : _speakResult,
               speechBusy: speechBusy,
               speechNotice: speechNotice,

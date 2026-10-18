@@ -105,7 +105,12 @@ class RepairSpeechFeedback {
   final FlutterTts _tts = FlutterTts();
   int _generation = 0;
 
-  Future<bool> speak(String text, {bool Function()? allowed}) async {
+  /// [waitDone]：念完才回傳（之後要開麥克風時用，避免收到自己的聲音）。
+  Future<bool> speak(
+    String text, {
+    bool Function()? allowed,
+    bool waitDone = false,
+  }) async {
     final generation = ++_generation;
     bool current() => generation == _generation && (allowed?.call() ?? true);
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return false;
@@ -128,6 +133,7 @@ class RepairSpeechFeedback {
     });
     if (!current()) return false;
     await _tts.setSpeechRate(0.48);
+    await _tts.awaitSpeakCompletion(waitDone);
     if (!current()) return false;
     return await _tts.speak(text.trim()) == 1;
   }

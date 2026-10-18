@@ -126,7 +126,8 @@ class CameraFrameSource extends DemoFrameSource {
 
     final controller = CameraController(
       description,
-      ResolutionPreset.veryHigh,
+      // 臉部特徵點不需要高解析度；中解析度較省電、手機不燙、偵測較快。
+      ResolutionPreset.medium,
       enableAudio: false,
       imageFormatGroup: Platform.isIOS
           ? ImageFormatGroup.bgra8888
