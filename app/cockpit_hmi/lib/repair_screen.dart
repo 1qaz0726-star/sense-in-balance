@@ -144,7 +144,35 @@ class _RepairScreenState extends State<RepairScreen> {
         final changed = await cloudLink.check();
         // 一連上網就先把台語辨識叫醒，台上第一句不用等冷啟動。
         if (changed && cloudLink.online) unawaited(cloudSpeech?.warm());
-        if (mounted && changed) setState(() {});
+        if (mounted && changed) {
+          setState(() {});
+          // 斷網／復網時跳一句提示，不只靠角落的狀態燈。
+          ScaffoldMessenger.maybeOf(context)
+            ?..hideCurrentSnackBar()
+            ..showSnackBar(
+              SnackBar(
+                duration: const Duration(seconds: 3),
+                content: Row(
+                  children: [
+                    Icon(
+                      cloudLink.online
+                          ? Icons.cloud_done_outlined
+                          : Icons.cloud_off_outlined,
+                      size: 18,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        cloudLink.online
+                            ? '已恢復連線，可使用雲端補充'
+                            : '連線中斷，已切回本地 AI；功能照常',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+        }
       }
 
       unawaited(probe());
@@ -824,10 +852,11 @@ class _RepairScreenState extends State<RepairScreen> {
           const SizedBox(width: 24),
         ],
         // 直放（窄螢幕）也要看得出現在是離線還是連網：決賽 S21 直放。
-        if (MediaQuery.sizeOf(context).width < 620 &&
+        // S9 橫放的寬度落在 620～1400 之間，原本兩段條件都不顯示；改成 500 以上一律顯示。
+        if (MediaQuery.sizeOf(context).width < 1400 &&
             MediaQuery.sizeOf(context).width >= 500 &&
             cloudAssist != null) ...[
-          _cloudStatus(compact: true),
+          _cloudStatus(compact: MediaQuery.sizeOf(context).width < 1100),
           const SizedBox(width: 6),
         ],
         if (MediaQuery.sizeOf(context).width < 1100)
@@ -865,31 +894,53 @@ class _RepairScreenState extends State<RepairScreen> {
     ),
   );
 
-  /// 頂部列的雲端狀態：連網時亮、離線時灰；連帶顯示本次累積的雲端教材數。
-  Widget _cloudStatus({bool compact = false}) => Row(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      Container(
-        width: 7,
-        height: 7,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: cloudOnline ? CockpitStyle.accent : CockpitStyle.muted,
-        ),
+  /// 頂部列的網路狀態：圖示＋文字（不只靠顏色），連帶顯示本次累積的雲端教材數。
+  Widget _cloudStatus({bool compact = false}) {
+    final color = cloudOnline ? CockpitStyle.accent : CockpitStyle.amber;
+    return Container(
+      key: const ValueKey('cloud_status'),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        border: Border.all(color: color.withValues(alpha: .6), width: .8),
+        borderRadius: BorderRadius.circular(999),
       ),
-      const SizedBox(width: 6),
-      Text(
-        compact
-            ? (cloudOnline ? '雲端增強' : '離線')
-            : cloudOnline
-            ? '雲端增強可用${cloudLessons > 0 ? '・教材 $cloudLessons 筆' : ''}'
-            : '離線・本地運作',
-        style: cockpitText(
-          12,
-          color: cloudOnline ? CockpitStyle.accent : CockpitStyle.muted,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            cloudOnline ? Icons.cloud_done_outlined : Icons.cloud_off_outlined,
+            size: 15,
+            color: color,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            compact
+                ? (cloudOnline ? '已連網' : '離線・本地 AI')
+                : cloudOnline
+                ? '已連網・雲端增強${cloudLessons > 0 ? '・教材 $cloudLessons 筆' : ''}'
+                : '離線・本地 AI 照常運作',
+            style: cockpitText(12, color: color),
+          ),
+        ],
       ),
-    ],
+    );
+  }
+
+  /// 這次候選是誰想出來的：本地 AI／雲端解讀／車主記憶／駕駛口令。
+  Widget _sourceChip(String label, IconData icon) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+    decoration: BoxDecoration(
+      color: CockpitStyle.accent.withValues(alpha: .12),
+      borderRadius: BorderRadius.circular(4),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 14, color: CockpitStyle.accent),
+        const SizedBox(width: 5),
+        Text(label, style: cockpitText(12, color: CockpitStyle.accent)),
+      ],
+    ),
   );
 
   Widget _viewPicker() => Row(
@@ -1280,11 +1331,15 @@ class _RepairScreenState extends State<RepairScreen> {
                       ),
                   ],
                 ),
-                if (speechStatus != null)
+                if (speechStatus != null) ...[
                   Text(
                     speechStatus!,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                     style: cockpitText(12, color: CockpitStyle.muted),
                   ),
+                  const SizedBox(height: 8),
+                ],
                 Row(
                   children: [
                     Expanded(
@@ -1344,18 +1399,55 @@ class _RepairScreenState extends State<RepairScreen> {
                     weight: FontWeight.w500,
                   ),
                 ),
-                if (task.patchSource == 'cloud' ||
-                    task.patchSource == 'memory') ...[
+                if (task.phase != RepairPhase.idle &&
+                    task.phase != RepairPhase.cancelled) ...[
                   const SizedBox(height: 8),
-                  Text(
-                    task.patchSource == 'memory'
-                        ? '來自車主記憶（之前確認過）・仍需駕駛確認'
-                        : task.clarification == null
-                        ? '雲端解讀（連網增強）・確認後會記住'
-                        : '雲端也無法確定，請補充一項',
-                    style: cockpitText(13, color: CockpitStyle.accent),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      if (collaboration.toJson()['driver_origin'] == true)
+                        _sourceChip('駕駛口令', Icons.record_voice_over_outlined)
+                      else if (task.patchSource == 'memory')
+                        _sourceChip('車主記憶', Icons.psychology_outlined)
+                      else if (task.patchSource == 'cloud')
+                        _sourceChip('雲端解讀', Icons.cloud_outlined)
+                      else
+                        _sourceChip('本地 AI', Icons.memory_outlined),
+                      Text(
+                        collaboration.toJson()['driver_origin'] == true
+                            ? '駕駛自己說的，可直接執行'
+                            : task.patchSource == 'memory'
+                            ? '之前確認過的說法・仍需駕駛確認'
+                            : task.patchSource == 'cloud'
+                            ? task.clarification == null
+                                  ? '連網增強・確認後會記住'
+                                  : '雲端也無法確定，請補充一項'
+                            : '手機上的小模型，斷網也能用',
+                        style: cockpitText(12, color: CockpitStyle.muted),
+                      ),
+                    ],
                   ),
                 ],
+                const SizedBox(height: 6),
+                Row(
+                  key: const ValueKey('safety_line'),
+                  children: [
+                    const Icon(
+                      Icons.verified_user_outlined,
+                      size: 14,
+                      color: CockpitStyle.muted,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        '乘客提出的需求，一律由駕駛確認後才套用；連網也不會自動套用。',
+                        style: cockpitText(11, color: CockpitStyle.muted),
+                      ),
+                    ),
+                  ],
+                ),
                 if (demoFault is Map) ...[
                   const SizedBox(height: 10),
                   DemoFaultNotice(fault: demoFault),
@@ -1575,9 +1667,17 @@ class _LevelTile extends StatelessWidget {
           Icon(_settingIcon(setting), size: 18, color: CockpitStyle.muted),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(
-              _settingName(setting),
-              style: cockpitText(13, color: CockpitStyle.muted),
+            // 直放時欄位很窄：改用短名、只排一行，避免被擠成一字一行的直排。
+            child: LayoutBuilder(
+              builder: (_, box) => Text(
+                box.maxWidth < 64
+                    ? _settingShortName(setting)
+                    : _settingName(setting),
+                maxLines: 1,
+                softWrap: false,
+                overflow: TextOverflow.fade,
+                style: cockpitText(13, color: CockpitStyle.muted),
+              ),
             ),
           ),
           Text(
@@ -1619,6 +1719,12 @@ IconData _settingIcon(CabinSetting value) => switch (value) {
   CabinSetting.rearFan => Icons.air_rounded,
   CabinSetting.mediaVolume => Icons.music_note_rounded,
   CabinSetting.navVolume => Icons.volume_up_outlined,
+};
+
+String _settingShortName(CabinSetting value) => switch (value) {
+  CabinSetting.rearFan => '後風',
+  CabinSetting.mediaVolume => '音樂',
+  CabinSetting.navVolume => '導航',
 };
 
 String _settingName(CabinSetting value) => switch (value) {
