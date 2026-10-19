@@ -36,16 +36,28 @@ const _no = [
   '不行',
   '不確定',
   '不是',
+  '不能',
+  '別',
+  '還沒',
+  '沒說',
 ];
-const _yes = ['好', '可以', '確認', '確定', '套用', '對', '沒問題', 'ok', '行', '是'];
 
-/// 否定詞優先：「不好」「不要套用」都算不要；聽不懂回 null（什麼都不做）。
+/// 肯定只收「整句就是這些話」（尾巴的語助詞去掉後比對），不用包含比對：
+/// 「我還沒確認」「這樣可以嗎」「要怎麼確認」都含肯定字，但不是同意。
+const _yes = {
+  '好', '好的', '好啊', '好喔', '可以', '可以的', '確認', '確定', '套用', '要套用', //
+  '確認套用', '好套用', '對', '沒錯', '沒問題', 'ok', 'okay', '行', '是', '要',
+};
+
+/// 否定詞優先：「不好」「不要套用」都算不要；肯定要整句吻合；
+/// 疑問句與其他聽不懂的話回 null（什麼都不做，需求保留）。
 VoiceReply? parseVoiceReply(String? text) {
   if (text == null) return null;
   final t = text.toLowerCase().replaceAll(RegExp(r'[\s，,。.!！?？]'), '');
   if (t.isEmpty || t.runes.length > 12) return null;
   if (_no.any(t.contains)) return VoiceReply.no;
-  if (_yes.any(t.contains)) return VoiceReply.yes;
+  final core = t.replaceAll(RegExp(r'(?:吧|啊|喔|哦|呀|啦|欸|嗯|了)+$'), '');
+  if (_yes.contains(core)) return VoiceReply.yes;
   return null;
 }
 

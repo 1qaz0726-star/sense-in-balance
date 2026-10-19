@@ -113,6 +113,16 @@ class RepairCollaboration extends ChangeNotifier {
   /// 最近一筆由駕駛自己用語音提出的需求（畫面標示「駕駛口令」用）。
   String? _driverOriginTaskId;
   bool _driverRequestBusy = false;
+  String? _driverRequestText;
+
+  /// 駕駛口令正在解析中（主控學車主記憶時，用來分辨這句是駕駛說的）。
+  bool get driverRequestInFlight => _driverRequestBusy;
+
+  /// 最近一次駕駛口令的原話。
+  String? get driverRequestText => _driverRequestText;
+
+  bool isDriverOrigin(String? taskId) =>
+      taskId != null && taskId == _driverOriginTaskId;
 
   /// 駕駛自己說的需求：已配對駕駛、沒有進行中的需求時才收。解析完成後，
   /// 若能直接確認，就走和按確認鍵完全相同的 [confirm]（身分、版本、注意力、
@@ -147,6 +157,7 @@ class RepairCollaboration extends ChangeNotifier {
       return 'rejected';
     }
     _driverRequestBusy = true;
+    _driverRequestText = trimmed;
     try {
       if (!await newTask(trimmed)) {
         _reject('需求沒有成功解析，請再說一次。');

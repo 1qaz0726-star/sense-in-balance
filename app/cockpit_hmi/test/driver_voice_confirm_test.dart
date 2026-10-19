@@ -51,4 +51,16 @@ void main() {
       isNot(a),
     );
   });
+
+  test('VOICE-01：否定、還沒、疑問句都不能當成同意', () {
+    for (final t in ['我還沒確認', '我沒說好', '不能套用', '別套用']) {
+      expect(parseVoiceReply(t), VoiceReply.no, reason: t);
+    }
+    for (final t in ['這樣可以嗎', '要怎麼確認', '確認什麼', '好像怪怪的']) {
+      expect(parseVoiceReply(t), isNull, reason: t);
+    }
+    for (final t in ['好啊', '可以喔', '要套用', '沒錯', '好喔。']) {
+      expect(parseVoiceReply(t), VoiceReply.yes, reason: t);
+    }
+  });
 }

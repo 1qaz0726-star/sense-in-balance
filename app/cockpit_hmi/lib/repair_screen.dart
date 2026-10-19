@@ -431,14 +431,22 @@ class _RepairScreenState extends State<RepairScreen> {
     final candidate = learnCandidate;
     if (task.phase == RepairPhase.awaitingConfirmation) {
       final source = task.patchSource;
-      if ((source == 'cloud' || source == 'memory') &&
-          lastSubmittedText != null) {
+      // 駕駛口令不經過乘客輸入框，要用駕駛說的那句，不能沿用上一句乘客的話。
+      final fromDriver =
+          collaboration.driverRequestInFlight ||
+          collaboration.isDriverOrigin(id);
+      final text = fromDriver
+          ? collaboration.driverRequestText
+          : lastSubmittedText;
+      if ((source == 'cloud' || source == 'memory') && text != null) {
         learnCandidate = (
           taskId: id,
-          text: lastSubmittedText!,
+          text: text,
           source: source!,
           pending: task.pending,
         );
+        // 用過就清掉，避免之後別的任務又拿這句去學。
+        if (!fromDriver) lastSubmittedText = null;
       } else if (candidate != null && candidate.taskId == id) {
         // 同一個任務後來被局部修改：記住駕駛最後確認的版本。
         learnCandidate = (
